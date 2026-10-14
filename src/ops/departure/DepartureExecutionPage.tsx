@@ -2,7 +2,10 @@ import { useMemo, type ComponentType } from 'react';
 import { useAsync } from '../useAsync';
 import { DeparturePanel } from './DeparturePanel';
 import type { DepartureExecutionGateway } from './gateway';
+import { FinishPanel } from './FinishPanel';
 import { HistoryPanel } from './HistoryPanel';
+import { NoveltiesPanel } from './NoveltiesPanel';
+import { ReservationsPanel } from './ReservationsPanel';
 import { panelsFor, type PanelId } from './panels';
 import type { PanelProps } from './panelProps';
 import { StartPanel } from './StartPanel';
@@ -11,6 +14,9 @@ import { StartPanel } from './StartPanel';
 const DRAWN: Partial<Record<PanelId, ComponentType<PanelProps>>> = {
   departure: DeparturePanel,
   start: StartPanel,
+  reservations: ReservationsPanel,
+  novelties: NoveltiesPanel,
+  finish: FinishPanel,
   history: HistoryPanel,
 };
 

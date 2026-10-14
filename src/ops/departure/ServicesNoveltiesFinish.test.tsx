@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { DepartureExecutionPage } from './DepartureExecutionPage';
 import { createDepartureFixture } from './fixture';
@@ -80,8 +80,8 @@ describe('finish of the departure (RN-OPS-PT-37)', () => {
     expect(spy).not.toHaveBeenCalled();
     fireEvent.change(within(panel).getByLabelText('Interrupción (causa y evidencia)'), { target: { value: 'Tormenta, foto adjunta' } });
     fireEvent.click(within(panel).getByRole('button', { name: 'Registrar finalización' }));
-    expect(await screen.findByText('Finalizada')).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Registrar la finalización o la interrupción' })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Registrar la finalización o la interrupción' })).not.toBeInTheDocument());
+    expect(within(await section('SAL-021')).getByText('Finalizada')).toBeInTheDocument();
     const history = (await screen.findByRole('heading', { name: 'Historial de la salida' })).closest('section') as HTMLElement;
     expect(within(history).getByText('Finalización')).toBeInTheDocument();
   });
@@ -100,7 +100,8 @@ describe('finish of the departure (RN-OPS-PT-37)', () => {
     fireEvent.change(within(panel).getByLabelText('Hora de finalización real'), { target: { value: '2026-10-14T12:30' } });
     fireEvent.click(within(panel).getByRole('button', { name: 'Registrar finalización' }));
     fireEvent.click(await within(panel).findByRole('button', { name: 'Reintentar' }));
-    expect(await screen.findByText('Finalizada')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Registrar la finalización o la interrupción' })).not.toBeInTheDocument());
+    expect(within(await section('SAL-021')).getByText('Finalizada')).toBeInTheDocument();
     expect(keys[0]).toBe(keys[1]);
   });
 });
