@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { Execution, OperationsGateway, UpcomingDeparture } from './gateway';
+import { CostPanel } from './CostPanel';
 import { useAsync, type AsyncState } from './useAsync';
 
 export interface OperationsPageProps {
@@ -160,6 +161,8 @@ export function OperationsPage({ gateway, onRegister }: OperationsPageProps) {
           )}
         </View>
       </section>
+
+      <CostPanel gateway={gateway} />
     </div>
   );
 }
