@@ -114,5 +114,20 @@ export function createDepartureFixture(): DepartureExecutionGateway {
         });
         d.history.push(log(finishedAt, 'Finalización', result === 'INTERRUPTED' ? `Interrumpida: ${cause}` : 'Finalizada'));
       }, code),
+    registerRegularization: async (input) =>
+      once(input.key, () => {
+        const d = find(input.code);
+        if (d.status !== 'PENDING_REGULARIZATION') throw new Error('INVALID_STATUS_TRANSITION');
+        const notDone = input.result === 'NOT_DONE';
+        d.status = notDone ? 'CANCELLED' : 'FINISHED';
+        d.mark = notDone ? 'No realizada' : input.result === 'INTERRUPTED' ? 'Finalizada con interrupción' : 'Cerrada';
+        if (!notDone) {
+          d.actualStart = input.startedAt;
+          d.actualEnd = input.finishedAt;
+        }
+        const at = notDone ? (d.actualStart ?? d.scheduledStart) : input.finishedAt;
+        const detail = notDone ? `No realizada: ${input.notDoneCause}` : input.result === 'INTERRUPTED' ? `Interrumpida: ${input.interruption}` : 'Ejecutada y finalizada';
+        d.history.push(log(at, 'Regularización', detail));
+      }, input.code),
   };
 }
