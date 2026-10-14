@@ -4,6 +4,7 @@ import { DeparturePanel } from './DeparturePanel';
 import type { DepartureExecutionGateway } from './gateway';
 import { FinishPanel } from './FinishPanel';
 import { HistoryPanel } from './HistoryPanel';
+import { NoveltiesPanel } from './NoveltiesPanel';
 import { ReservationsPanel } from './ReservationsPanel';
 import { panelsFor, type PanelId } from './panels';
 import type { PanelProps } from './panelProps';
@@ -14,6 +15,7 @@ const DRAWN: Partial<Record<PanelId, ComponentType<PanelProps>>> = {
   departure: DeparturePanel,
   start: StartPanel,
   reservations: ReservationsPanel,
+  novelties: NoveltiesPanel,
   finish: FinishPanel,
   history: HistoryPanel,
 };
