@@ -30,6 +30,7 @@ export function createDepartureFixture(): DepartureExecutionGateway {
       if (reused) return { ...reused };
       const found = departures.find((d) => d.code === code);
       if (!found) throw new Error('NOT_FOUND');
+      if (found.status !== 'SCHEDULED') throw new Error('INVALID_STATUS_TRANSITION');
       if (new Date(startedAt) < new Date(found.scheduledStart)) throw new Error('START_BEFORE_SCHEDULED');
       found.status = 'IN_EXECUTION';
       found.actualStart = startedAt;

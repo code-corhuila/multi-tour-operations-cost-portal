@@ -51,10 +51,16 @@ describe('departure execution page', () => {
     expect(screen.getByRole('heading', { name: 'Historial de la salida' })).toBeInTheDocument();
   });
 
+  it('U·start_is_refused_unless_the_departure_is_scheduled: an executing departure cannot be started again', async () => {
+    const gateway = createDepartureFixture();
+    await expect(gateway.registerStart({ code: 'SAL-021', startedAt: '2026-10-14T09:00', key: 'k-refused' })).rejects.toThrow('INVALID_STATUS_TRANSITION');
+    await expect(gateway.registerStart({ code: 'SAL-018', startedAt: '2026-10-18T08:30', key: 'k-ok' })).resolves.toMatchObject({ status: 'IN_EXECUTION' });
+  });
+
   it('U·forms_are_disabled_without_the_permission: the note shows and the start cannot be sent', async () => {
     const { gateway } = setup('SAL-018', false);
     const spy = vi.spyOn(gateway, 'registerStart');
-    expect(await screen.findByText(/no tiene el permiso Gestionar ejecución de salidas|no tiene el permiso/)).toBeInTheDocument();
+    expect(await screen.findByText(/no tiene el permiso Gestionar ejecución de salidas/)).toBeInTheDocument();
     expect(screen.getByLabelText('Hora de inicio real')).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Registrar inicio real' })).toBeDisabled();
     expect(spy).not.toHaveBeenCalled();
