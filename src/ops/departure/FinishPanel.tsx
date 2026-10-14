@@ -21,7 +21,7 @@ export function FinishPanel({ departure, gateway, canManage, onChanged }: PanelP
     if (Object.keys(next).length > 0) return;
     let updated: Departure | undefined;
     const ok = await submit(`${departure.code}|${finishedAt}|${result}|${cause.trim()}`, async (key) => {
-      updated = await gateway.registerFinish({ code: departure.code, finishedAt, result, cause: cause.trim(), key });
+      updated = await gateway.registerFinish({ code: departure.code, finishedAt, result, cause: result === 'INTERRUPTED' ? cause.trim() : '', key });
     });
     if (ok && updated) onChanged(updated);
   }

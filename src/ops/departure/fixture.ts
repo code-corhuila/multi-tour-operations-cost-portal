@@ -104,7 +104,8 @@ export function createDepartureFixture(): DepartureExecutionGateway {
     registerFinish: async ({ code, finishedAt, result, cause, key }) =>
       once(key, () => {
         const d = find(code);
-        if (d.status !== 'IN_EXECUTION') throw new Error('INVALID_STATUS_TRANSITION');
+        if (d.status !== 'IN_EXECUTION' && d.status !== 'PENDING_REGULARIZATION') throw new Error('INVALID_STATUS_TRANSITION');
+        if (result === 'INTERRUPTED' && !cause.trim()) throw new Error('VALIDATION_ERROR');
         d.status = 'FINISHED';
         d.actualEnd = finishedAt;
         d.mark = result === 'INTERRUPTED' ? 'Finalizada con interrupción' : 'Cerrada';

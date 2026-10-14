@@ -83,4 +83,10 @@ describe('finish of the departure (RN-OPS-PT-37)', () => {
     expect(within(await section('SAL-021')).getByText('Finalizada')).toBeInTheDocument();
     expect(keys[0]).toBe(keys[1]);
   });
+  it('U·finish_is_allowed_from_pending_regularization_and_refused_from_a_cancelled_departure', async () => {
+    const gateway = createDepartureFixture();
+    await expect(gateway.registerFinish({ code: 'SAL-014', finishedAt: '2026-10-10T14:00', result: 'FINISHED', cause: '', key: 'k-reg' })).resolves.toMatchObject({ status: 'FINISHED' });
+    await expect(gateway.registerFinish({ code: 'SAL-003', finishedAt: '2026-10-02T14:00', result: 'FINISHED', cause: '', key: 'k-canc' })).rejects.toThrow('INVALID_STATUS_TRANSITION');
+    await expect(gateway.registerFinish({ code: 'SAL-021', finishedAt: '2026-10-14T13:00', result: 'INTERRUPTED', cause: '  ', key: 'k-nocause' })).rejects.toThrow('VALIDATION_ERROR');
+  });
 });
