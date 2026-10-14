@@ -20,5 +20,26 @@ export function createFixtureGateway(): OperationsGateway {
       found.status = 'FINISHED';
       return { ...found };
     },
+    getReservation: async (reservationId) => {
+      const row = upcoming.find((u) => u.reservationId === reservationId);
+      if (!row) throw new Error('NOT_FOUND');
+      return { reservationId, customer: 'Cliente de prueba', service: row.service, date: row.date, reserved: 6 };
+    },
+    registerExecution: async (input) => {
+      const row = upcoming.find((u) => u.reservationId === input.reservationId);
+      const created: Execution = {
+        reservationId: input.reservationId,
+        date: row?.date ?? '',
+        service: row?.service ?? '',
+        reserved: 6,
+        executed: input.served ? input.executed : 0,
+        cause: input.served ? '—' : input.cause,
+        status: 'IN_PROGRESS',
+        responsible: 'Operador demo',
+      };
+      executions.push(created);
+      return { ...created };
+    },
+    recordCost: async () => undefined,
   };
 }

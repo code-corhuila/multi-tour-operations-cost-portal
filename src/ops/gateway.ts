@@ -22,4 +22,29 @@ export interface OperationsGateway {
   listUpcoming(): Promise<UpcomingDeparture[]>;
   listExecutions(): Promise<Execution[]>;
   finalizeExecution(reservationId: string): Promise<Execution>;
+  getReservation(reservationId: string): Promise<ReservationToExecute>;
+  registerExecution(input: ExecutionInput): Promise<Execution>;
+  recordCost(input: CostInput): Promise<void>;
 }
+
+export interface ReservationToExecute {
+  reservationId: string;
+  customer: string;
+  service: string;
+  date: string;
+  reserved: number;
+}
+
+export interface ExecutionInput {
+  reservationId: string;
+  served: boolean;
+  executed: number;
+  cause: string;
+}
+
+export interface CostInput {
+  reservationId: string;
+  concept: string;
+  amountCents: number;
+}
+
