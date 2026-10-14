@@ -7,7 +7,7 @@ services:
       dockerfile: deploy/Dockerfile
     image: multi-tour-operations-cost-portal:dev
     expose:
-      - "80"
+      - "8080"
     networks:
       - platform
     restart: unless-stopped
