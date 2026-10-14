@@ -1,0 +1,17 @@
+# Service of the portal of the operations-cost domain. The root composition (multi-tour-infra-postgres) includes it.
+# Only the gateway publishes a port: this service declares expose (norm 5.6.1).
+services:
+  multi-tour-operations-cost-portal:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: multi-tour-operations-cost-portal:dev
+    expose:
+      - "8080"
+    networks:
+      - platform
+    restart: unless-stopped
+
+networks:
+  platform:
+    external: true
