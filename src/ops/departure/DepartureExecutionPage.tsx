@@ -6,6 +6,7 @@ import { FinishPanel } from './FinishPanel';
 import { HistoryPanel } from './HistoryPanel';
 import { NoveltiesPanel } from './NoveltiesPanel';
 import { ReservationsPanel } from './ReservationsPanel';
+import { RegularizePanel } from './RegularizePanel';
 import { panelsFor, type PanelId } from './panels';
 import type { PanelProps } from './panelProps';
 import { StartPanel } from './StartPanel';
@@ -17,6 +18,7 @@ const DRAWN: Partial<Record<PanelId, ComponentType<PanelProps>>> = {
   reservations: ReservationsPanel,
   novelties: NoveltiesPanel,
   finish: FinishPanel,
+  regularize: RegularizePanel,
   history: HistoryPanel,
 };
 
