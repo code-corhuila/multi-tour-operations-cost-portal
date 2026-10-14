@@ -91,7 +91,7 @@ describe('departure execution page', () => {
     expect(screen.queryByRole('heading', { name: 'Registrar el inicio real' })).not.toBeInTheDocument();
     const history = screen.getByRole('heading', { name: 'Historial de la salida' }).closest('section') as HTMLElement;
     expect(within(history).getByText('Inicio de la salida')).toBeInTheDocument();
-    expect(within(history).getByText('Operador demo')).toBeInTheDocument();
+    expect(within(history).getAllByText('Operador demo')).toHaveLength(2);
   });
 
   it('U·submit_is_disabled_while_sending: one call and the button is blocked until it answers', async () => {
