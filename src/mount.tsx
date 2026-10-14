@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { MountProps } from './contract';
 import { createFixtureGateway } from './ops/fixtureGateway';
 import { OperationsPage } from './ops/OperationsPage';
+import { RegisterExecutionForm } from './ops/RegisterExecutionForm';
 import './ui/operator.css';
 import { ensureStylesheet } from './ui/stylesheet';
 
@@ -10,8 +11,9 @@ import { ensureStylesheet } from './ui/stylesheet';
 // for the role, so this only decides what to show (RN-OPS-PT-01).
 const OPERATOR_ROLES = ['TENANT_ADMINISTRATOR', 'OPERATIONAL_COLLABORATOR', 'MANAGER'];
 
-function App({ identifier, navigate, session }: MountProps) {
+function App({ session }: MountProps) {
   const gateway = useMemo(createFixtureGateway, []);
+  const [registering, setRegistering] = useState<string>();
   if (!session.roles.some((role) => OPERATOR_ROLES.includes(role))) {
     return (
       <p role="alert" className="operator-copy">
@@ -19,8 +21,9 @@ function App({ identifier, navigate, session }: MountProps) {
       </p>
     );
   }
-  const base = `/t/${identifier ?? ''}/areas/operations-cost-portal`;
-  return <OperationsPage gateway={gateway} onRegister={(reservationId) => navigate?.(`${base}/registrar/${reservationId}`)} />;
+  // The portal keeps its own view: the container routes to the area, not inside it.
+  if (registering) return <RegisterExecutionForm gateway={gateway} reservationId={registering} onBack={() => setRegistering(undefined)} />;
+  return <OperationsPage gateway={gateway} onRegister={setRegistering} />;
 }
 
 // The container calls this with its own client and session; the portal never creates either (Annex H).
