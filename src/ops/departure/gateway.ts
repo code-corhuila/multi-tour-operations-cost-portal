@@ -30,8 +30,23 @@ export interface StartInput {
   key: string;
 }
 
+export type RegularizationResult = 'EXECUTED' | 'INTERRUPTED' | 'NOT_DONE';
+
+// Fields that do not apply to the result are sent empty (RN-OPS-PT-38).
+export interface RegularizationInput {
+  code: string;
+  result: RegularizationResult;
+  startedAt: string;
+  finishedAt: string;
+  earlyStartMotive: string;
+  interruption: string;
+  notDoneCause: string;
+  key: string;
+}
+
 export interface DepartureExecutionGateway {
   // Resolves undefined when the departure does not exist.
   getDeparture(code: string): Promise<Departure | undefined>;
   registerStart(input: StartInput): Promise<Departure>;
+  registerRegularization(input: RegularizationInput): Promise<Departure>;
 }

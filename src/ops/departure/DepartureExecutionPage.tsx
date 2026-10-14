@@ -3,6 +3,7 @@ import { useAsync } from '../useAsync';
 import { DeparturePanel } from './DeparturePanel';
 import type { DepartureExecutionGateway } from './gateway';
 import { HistoryPanel } from './HistoryPanel';
+import { RegularizePanel } from './RegularizePanel';
 import { panelsFor, type PanelId } from './panels';
 import type { PanelProps } from './panelProps';
 import { StartPanel } from './StartPanel';
@@ -11,6 +12,7 @@ import { StartPanel } from './StartPanel';
 const DRAWN: Partial<Record<PanelId, ComponentType<PanelProps>>> = {
   departure: DeparturePanel,
   start: StartPanel,
+  regularize: RegularizePanel,
   history: HistoryPanel,
 };
 

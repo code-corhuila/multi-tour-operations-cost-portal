@@ -39,5 +39,24 @@ export function createDepartureFixture(): DepartureExecutionGateway {
       answered.set(key, result);
       return { ...result };
     },
+    registerRegularization: async (input) => {
+      const reused = answered.get(input.key);
+      if (reused) return { ...reused };
+      const found = departures.find((d) => d.code === input.code);
+      if (!found) throw new Error('NOT_FOUND');
+      const done = input.result === 'NOT_DONE';
+      found.status = done ? 'CANCELLED' : 'FINISHED';
+      found.mark = done ? 'No realizada' : input.result === 'INTERRUPTED' ? 'Finalizada con interrupción' : 'Cerrada';
+      if (!done) {
+        found.actualStart = input.startedAt;
+        found.actualEnd = input.finishedAt;
+      }
+      const at = done ? (found.actualStart ?? found.scheduledStart) : input.finishedAt;
+      const detail = done ? `No realizada: ${input.notDoneCause}` : input.result === 'INTERRUPTED' ? `Interrumpida: ${input.interruption}` : 'Ejecutada y finalizada';
+      found.history.push(log(at, 'Regularización', detail));
+      const result = { ...found, history: [...found.history] };
+      answered.set(input.key, result);
+      return { ...result };
+    },
   };
 }
