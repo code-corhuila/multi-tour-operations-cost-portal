@@ -12,6 +12,8 @@ export interface DeparturesPageProps {
   // Without a handler the control is not drawn: the form arrives in its own task.
   onSchedule?: () => void;
   onEdit?: (code: string) => void;
+  // The line of the form that just returned (spec 005 AC6).
+  notice?: string;
 }
 
 interface Data {
@@ -50,7 +52,7 @@ async function load(gateway: DeparturesGateway): Promise<Data> {
 }
 
 // Page of the Mockup admin-salidas.html (spec 005 PT-10) over the test data of the port.
-export function DeparturesPage({ gateway, canSchedule, canManage, onOpen, onSchedule, onEdit }: DeparturesPageProps) {
+export function DeparturesPage({ gateway, canSchedule, canManage, onOpen, onSchedule, onEdit, notice }: DeparturesPageProps) {
   // A stable loader: useAsync reloads whenever the function changes.
   const loadAll = useCallback(() => load(gateway), [gateway]);
   const { state, retry, set } = useAsync(loadAll);
@@ -59,7 +61,7 @@ export function DeparturesPage({ gateway, canSchedule, canManage, onOpen, onSche
   const [cause, setCause] = useState('');
   const [error, setError] = useState<string>();
   const [sending, setSending] = useState(false);
-  const [result, setResult] = useState<string>();
+  const [result, setResult] = useState<string | undefined>(notice);
 
   const data = state.kind === 'data' ? state.data : undefined;
   const tourOf = (d: DepartureRow) => data?.tours.find((t) => t.id === d.tourId);
