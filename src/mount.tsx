@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 import type { MountProps } from './contract';
 import { createFixtureGateway } from './ops/fixtureGateway';
 import { DepartureExecutionPage } from './ops/departure/DepartureExecutionPage';
+import { DeparturesPage } from './ops/departures/DeparturesPage';
+import type { DeparturesGateway } from './ops/departures/model';
 import type { DepartureExecutionGateway } from './ops/departure/gateway';
 import { OperationsPage } from './ops/OperationsPage';
 import './ui/operator.css';
@@ -14,21 +16,26 @@ const OPERATOR_ROLES = ['TENANT_ADMINISTRATOR', 'OPERATIONAL_COLLABORATOR', 'MAN
 // shortcut: the permission "Gestionar ejecución de salidas" is not in the token yet; these roles stand for it until the
 // contract of the service says otherwise (spec 004 RN-OPS-PT-30).
 const MANAGE_ROLES = ['TENANT_ADMINISTRATOR', 'MANAGER'];
+// Scheduling, editing and cancelling a departure are the Administrator's (RN-OPS-PT-58).
+const SCHEDULE_ROLES = ['TENANT_ADMINISTRATOR'];
 
 interface DepartureFixture {
   gateway: DepartureExecutionGateway;
+  departures: DeparturesGateway;
   codeOf: (reservationId: string) => string;
 }
 
-function App({ session }: MountProps) {
+function App({ session, area }: MountProps) {
   const gateway = useMemo(createFixtureGateway, []);
   const [departure, setDeparture] = useState<string>();
   const [fixture, setFixture] = useState<DepartureFixture>();
+  const [view, setView] = useState<'operation' | 'departures'>(area === 'departures' ? 'departures' : 'operation');
+  useEffect(() => setView(area === 'departures' ? 'departures' : 'operation'), [area]);
   // The departure test data travel in the bundle only in development (spec 004 plan D-08, RN-OPS-PT-42).
   useEffect(() => {
     if (import.meta.env.DEV) {
-      void import('./ops/departure/fixture').then((m) =>
-        setFixture({ gateway: m.createDepartureFixture(), codeOf: m.departureCodeOfReservation }),
+      void Promise.all([import('./ops/departure/fixture'), import('./ops/departures/fixture')]).then(([execution, list]) =>
+        setFixture({ gateway: execution.createDepartureFixture(), codeOf: execution.departureCodeOfReservation, departures: list.createDeparturesFixture() }),
       );
     }
   }, []);
@@ -43,6 +50,18 @@ function App({ session }: MountProps) {
   if (departure && fixture) {
     const canManage = session.roles.some((role) => MANAGE_ROLES.includes(role));
     return <DepartureExecutionPage gateway={fixture.gateway} code={departure} canManage={canManage} onBack={() => setDeparture(undefined)} />;
+  }
+  if (view === 'departures') {
+    if (!fixture) return <p className="operator-copy">Las salidas de prueba no están disponibles en esta versión.</p>;
+    const roles = session.roles;
+    return (
+      <DeparturesPage
+        gateway={fixture.departures}
+        canSchedule={roles.some((role) => SCHEDULE_ROLES.includes(role))}
+        canManage={roles.some((role) => MANAGE_ROLES.includes(role))}
+        onOpen={setDeparture}
+      />
+    );
   }
   return <OperationsPage gateway={gateway} onRegister={(reservationId) => fixture && setDeparture(fixture.codeOf(reservationId))} />;
 }
