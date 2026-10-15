@@ -1,4 +1,4 @@
-import { useCallback, useState, type FormEvent } from 'react';
+import { useCallback, useRef, useState, type FormEvent } from 'react';
 import { effectiveCapacity, overlaps } from './capacity';
 import type { DeparturesGateway } from './model';
 import { useAsync } from '../useAsync';
@@ -23,6 +23,8 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
   const [form, setForm] = useState<{ tourId: string; date: string; start: string; end: string; vehicleIds: string[] }>();
   const [messages, setMessages] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
+  // One key per attempt: a retry of the same data after a failure reuses it; a new save, even of data seen before, gets another.
+  const attempt = useRef<{ signature: string; key: string } | undefined>(undefined);
 
   if (state.kind === 'loading') return <p role="status">Cargando…</p>;
   if (state.kind === 'error') {
@@ -65,13 +67,15 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
     setSending(true);
     try {
       const { start, end } = interval(current);
-      // The same data gives the same key: repeating the save answers the same departure (Idempotency-Key).
-      const key = `schedule:${editCode ?? 'new'}|${current.tourId}|${start}|${end}|${[...current.vehicleIds].sort().join(',')}`;
+      const signature = `${editCode ?? 'new'}|${current.tourId}|${start}|${end}|${[...current.vehicleIds].sort().join(',')}`;
+      if (attempt.current?.signature !== signature) attempt.current = { signature, key: `schedule:${crypto.randomUUID()}` };
+      const key = attempt.current.key;
       const saved = editCode
         ? await gateway.updateDeparture({ code: editCode, tourId: current.tourId, start, end, vehicleIds: current.vehicleIds, key })
         : await gateway.scheduleDeparture({ tourId: current.tourId, start, end, vehicleIds: current.vehicleIds, key });
       const verb = editCode ? 'actualizada' : 'programada';
       const tail = editCode ? '' : ' Ya se puede reservar.';
+      attempt.current = undefined;
       onSaved(`Salida ${saved.code} ${verb} (${tour.name}, ${start.replace('T', ' ')}). Capacidad efectiva: ${capacity}.${tail}`);
     } catch {
       setMessages(['No pudimos guardar la salida. Tus datos siguen aquí.']);
