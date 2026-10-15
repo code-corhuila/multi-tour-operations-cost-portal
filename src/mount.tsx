@@ -4,6 +4,7 @@ import type { MountProps } from './contract';
 import { createFixtureGateway } from './ops/fixtureGateway';
 import { DepartureExecutionPage } from './ops/departure/DepartureExecutionPage';
 import { DeparturesPage } from './ops/departures/DeparturesPage';
+import { ScheduleDepartureForm } from './ops/departures/ScheduleDepartureForm';
 import type { DeparturesGateway } from './ops/departures/model';
 import type { DepartureExecutionGateway } from './ops/departure/gateway';
 import { OperationsPage } from './ops/OperationsPage';
@@ -30,6 +31,9 @@ function App({ session, area }: MountProps) {
   const [departure, setDeparture] = useState<string>();
   const [fixture, setFixture] = useState<DepartureFixture>();
   const [view, setView] = useState<'operation' | 'departures'>(area === 'departures' ? 'departures' : 'operation');
+  // The form of a departure is a state of the Salidas area: new (editing undefined) or editing a code.
+  const [form, setForm] = useState<{ code?: string }>();
+  const [notice, setNotice] = useState<string>();
   useEffect(() => setView(area === 'departures' ? 'departures' : 'operation'), [area]);
   // The departure test data travel in the bundle only in development (spec 004 plan D-08, RN-OPS-PT-42).
   useEffect(() => {
@@ -54,12 +58,37 @@ function App({ session, area }: MountProps) {
   if (view === 'departures') {
     if (!fixture) return <p className="operator-copy">Las salidas de prueba no están disponibles en esta versión.</p>;
     const roles = session.roles;
+    const canSchedule = roles.some((role) => SCHEDULE_ROLES.includes(role));
+    // Only the Administrator reaches the form; anyone else keeps the list (RN-OPS-PT-58).
+    if (form && canSchedule) {
+      return (
+        <ScheduleDepartureForm
+          gateway={fixture.departures}
+          editCode={form.code}
+          onBack={() => setForm(undefined)}
+          onSaved={(line) => {
+            setNotice(line);
+            setForm(undefined);
+          }}
+        />
+      );
+    }
     return (
       <DeparturesPage
+        key={notice}
         gateway={fixture.departures}
-        canSchedule={roles.some((role) => SCHEDULE_ROLES.includes(role))}
+        canSchedule={canSchedule}
         canManage={roles.some((role) => MANAGE_ROLES.includes(role))}
         onOpen={setDeparture}
+        onSchedule={() => {
+          setNotice(undefined);
+          setForm({});
+        }}
+        onEdit={(code) => {
+          setNotice(undefined);
+          setForm({ code });
+        }}
+        notice={notice}
       />
     );
   }
