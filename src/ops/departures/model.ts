@@ -33,10 +33,25 @@ export interface CancelInput {
   key: string;
 }
 
+export interface ScheduleInput {
+  tourId: string;
+  start: string;
+  end: string;
+  vehicleIds: string[];
+  key: string;
+}
+
+export interface UpdateInput extends ScheduleInput {
+  code: string;
+}
+
 export interface DeparturesGateway {
   listDepartures(): Promise<DepartureRow[]>;
   listTours(): Promise<Tour[]>;
   listVehicles(): Promise<Vehicle[]>;
   // Only a SCHEDULED departure is cancelled; the answer says how many reservations open their rescheduling.
+  scheduleDeparture(input: ScheduleInput): Promise<DepartureRow>;
+  // Only a SCHEDULED departure is edited; with reservations its date, hours and tour stay (RN-OPS-PT-56).
+  updateDeparture(input: UpdateInput): Promise<DepartureRow>;
   cancelDeparture(input: CancelInput): Promise<{ departure: DepartureRow; reservationsToReschedule: number }>;
 }
