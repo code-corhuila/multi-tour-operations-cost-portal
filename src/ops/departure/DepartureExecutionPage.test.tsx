@@ -176,4 +176,8 @@ describe('departure execution page', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Reintentar' }));
     expect(await screen.findByText('No encontramos esta salida.')).toBeInTheDocument();
   });
+  it('U·every_scheduled_departure_of_the_list_can_be_opened: SAL-025 exists in the execution fixture', async () => {
+    const gateway = createDepartureFixture();
+    await expect(gateway.getDeparture('SAL-025')).resolves.toMatchObject({ code: 'SAL-025', status: 'SCHEDULED' });
+  });
 });

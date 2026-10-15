@@ -19,6 +19,15 @@ describe('operations portal mount (RN-OPS-PT-01)', () => {
     await waitFor(() => expect(element).toBeEmptyDOMElement());
   });
 
+  it('U·area_departures_opens_the_list: the side menu entry Salidas draws the list and Operación the operation page', async () => {
+    const element = document.createElement('div');
+    document.body.appendChild(element);
+    const unmount = mount(element, { ...props(['TENANT_ADMINISTRATOR']), area: 'departures' });
+    expect(await screen.findByRole('heading', { name: 'Salidas' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Operación y costos' })).not.toBeInTheDocument();
+    unmount();
+  });
+
   it('U·hidden_without_the_role: a customer sees no operation data', async () => {
     const element = document.createElement('div');
     document.body.appendChild(element);
