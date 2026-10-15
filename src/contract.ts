@@ -10,8 +10,14 @@ export interface Session {
   close(): void;
 }
 
+// The container has one remote and two areas of the side menu (spec 005 G-3): Salidas and Operación.
+export type Area = 'departures' | 'operation';
+
 export interface MountProps {
   identifier?: string;
+  area?: Area;
+  // The container hands the area of the side menu here (`/t/<id>/areas/<portal>?area=<key>`), not as `area`.
+  initialParams?: { area?: string };
   // SPA navigation owned by the container.
   navigate?: (path: string) => void;
   apiClient: ApiClient;

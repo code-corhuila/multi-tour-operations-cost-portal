@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { mount } from './mount';
 import type { MountProps } from './contract';
@@ -17,6 +17,44 @@ describe('operations portal mount (RN-OPS-PT-01)', () => {
     expect(await screen.findByRole('heading', { name: 'Operación y costos' })).toBeInTheDocument();
     unmount();
     await waitFor(() => expect(element).toBeEmptyDOMElement());
+  });
+
+  it('U·area_departures_opens_the_list: the side menu entry Salidas draws the list and Operación the operation page', async () => {
+    const element = document.createElement('div');
+    document.body.appendChild(element);
+    const unmount = mount(element, { ...props(['TENANT_ADMINISTRATOR']), area: 'departures' });
+    expect(await screen.findByRole('heading', { name: 'Salidas' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Operación y costos' })).not.toBeInTheDocument();
+    unmount();
+  });
+
+  it('U·initial_params_area_opens_the_list: the container hands the area in initialParams, not as a property', async () => {
+    const element = document.createElement('div');
+    document.body.appendChild(element);
+    const unmount = mount(element, { ...props(['TENANT_ADMINISTRATOR']), initialParams: { area: 'departures' } });
+    expect(await screen.findByRole('heading', { name: 'Salidas' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Operación y costos' })).not.toBeInTheDocument();
+    unmount();
+  });
+
+  it('U·schedule_flow_goes_list_form_list: the Administrator opens the form and returns with the result line', async () => {
+    const element = document.createElement('div');
+    document.body.appendChild(element);
+    const unmount = mount(element, { ...props(['TENANT_ADMINISTRATOR']), area: 'departures' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Programar salida' }));
+    expect(await screen.findByRole('heading', { name: 'Programar salida' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Volver a salidas' }));
+    expect(await screen.findByRole('heading', { name: 'Salidas' })).toBeInTheDocument();
+    unmount();
+  });
+
+  it('U·manager_sees_no_schedule_link: only the Administrator schedules', async () => {
+    const element = document.createElement('div');
+    document.body.appendChild(element);
+    const unmount = mount(element, { ...props(['MANAGER']), area: 'departures' });
+    expect(await screen.findByRole('heading', { name: 'Salidas' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Programar salida' })).not.toBeInTheDocument();
+    unmount();
   });
 
   it('U·hidden_without_the_role: a customer sees no operation data', async () => {
