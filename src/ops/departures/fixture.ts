@@ -27,12 +27,38 @@ const seed = (): DepartureRow[] => [
 export function createDeparturesFixture(): DeparturesGateway {
   const departures = seed();
   const answered = new Map<string, { departure: DepartureRow; reservationsToReschedule: number }>();
+  const written = new Map<string, DepartureRow>();
+  const nextCode = () => `SAL-${String(Math.max(...departures.map((d) => Number(d.code.slice(4)))) + 1).padStart(3, '0')}`;
   const copy = (d: DepartureRow): DepartureRow => ({ ...d, vehicleIds: [...d.vehicleIds] });
 
   return {
     listDepartures: async () => departures.map(copy),
     listTours: async () => tours.map((t) => ({ ...t })),
     listVehicles: async () => vehicles.map((v) => ({ ...v })),
+    scheduleDeparture: async ({ tourId, start, end, vehicleIds, key }) => {
+      const reused = written.get(key);
+      if (reused) return copy(reused);
+      if (!tours.some((t) => t.id === tourId)) throw new Error('VALIDATION_ERROR');
+      const created: DepartureRow = { code: nextCode(), tourId, start, end, vehicleIds: [...vehicleIds], booked: 0, reservations: 0, status: 'SCHEDULED' };
+      departures.push(created);
+      written.set(key, copy(created));
+      return copy(created);
+    },
+    updateDeparture: async ({ code, tourId, start, end, vehicleIds, key }) => {
+      const reused = written.get(key);
+      if (reused) return copy(reused);
+      const found = departures.find((d) => d.code === code);
+      if (!found) throw new Error('NOT_FOUND');
+      if (found.status !== 'SCHEDULED') throw new Error('INVALID_STATUS_TRANSITION');
+      const moved = found.tourId !== tourId || found.start !== start || found.end !== end;
+      if (found.reservations > 0 && moved) throw new Error('BUSINESS_RULE_VIOLATION');
+      found.tourId = tourId;
+      found.start = start;
+      found.end = end;
+      found.vehicleIds = [...vehicleIds];
+      written.set(key, copy(found));
+      return copy(found);
+    },
     cancelDeparture: async ({ code, cause, key }) => {
       const reused = answered.get(key);
       if (reused) return { departure: copy(reused.departure), reservationsToReschedule: reused.reservationsToReschedule };
