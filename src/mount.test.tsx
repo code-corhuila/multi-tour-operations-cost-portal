@@ -28,6 +28,15 @@ describe('operations portal mount (RN-OPS-PT-01)', () => {
     unmount();
   });
 
+  it('U·initial_params_area_opens_the_list: the container hands the area in initialParams, not as a property', async () => {
+    const element = document.createElement('div');
+    document.body.appendChild(element);
+    const unmount = mount(element, { ...props(['TENANT_ADMINISTRATOR']), initialParams: { area: 'departures' } });
+    expect(await screen.findByRole('heading', { name: 'Salidas' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Operación y costos' })).not.toBeInTheDocument();
+    unmount();
+  });
+
   it('U·schedule_flow_goes_list_form_list: the Administrator opens the form and returns with the result line', async () => {
     const element = document.createElement('div');
     document.body.appendChild(element);
