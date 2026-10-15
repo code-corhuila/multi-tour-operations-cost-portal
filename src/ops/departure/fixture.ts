@@ -29,6 +29,10 @@ const seed = (): Departure[] => [
     novelties: [], history: [log('2026-10-05T08:00', 'Inicio de la salida', 'Inicio real 2026-10-05 08:00'), log('2026-10-05T13:40', 'Finalización', 'Finalizada')],
   },
   {
+    code: 'SAL-025', status: 'SCHEDULED', vehicles: [], capacity: 10, booked: 0, scheduledStart: '2026-10-25T09:00', scheduledEnd: '2026-10-25T15:00', mark: '—',
+    reservations: [], novelties: [], history: [log('2026-10-12T10:00', 'Salida programada', 'Creada sin reservas')],
+  },
+  {
     code: 'SAL-003', status: 'CANCELLED', vehicles: [], capacity: 10, booked: 0, scheduledStart: '2026-10-02T08:00', scheduledEnd: '2026-10-02T14:00', mark: 'Cancelada',
     reservations: [], novelties: [], history: [log('2026-10-01T10:00', 'Salida cancelada', 'Sin cupos mínimos')],
   },
