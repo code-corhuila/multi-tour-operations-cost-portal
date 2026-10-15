@@ -26,7 +26,8 @@ interface DepartureFixture {
   codeOf: (reservationId: string) => string;
 }
 
-function App({ session, area }: MountProps) {
+function App({ session, area: areaProp, initialParams }: MountProps) {
+  const area = areaProp ?? (initialParams?.area === 'departures' || initialParams?.area === 'operation' ? initialParams.area : undefined);
   const gateway = useMemo(createFixtureGateway, []);
   const [departure, setDeparture] = useState<string>();
   const [fixture, setFixture] = useState<DepartureFixture>();
