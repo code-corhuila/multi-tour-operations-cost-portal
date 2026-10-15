@@ -39,6 +39,7 @@ function App({ session, area }: MountProps) {
     // A menu click leaves the execution page and the form: the entry of the side menu always shows its own page.
     setDeparture(undefined);
     setForm(undefined);
+    setNotice(undefined);
   }, [area]);
   // The departure test data travel in the bundle only in development (spec 004 plan D-08, RN-OPS-PT-42).
   useEffect(() => {

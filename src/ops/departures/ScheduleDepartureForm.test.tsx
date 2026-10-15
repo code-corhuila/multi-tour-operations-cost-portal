@@ -83,4 +83,20 @@ describe('schedule departure form (spec 005)', () => {
     await expect(gateway.updateDeparture({ ...base, code: 'SAL-018' })).rejects.toThrow('BUSINESS_RULE_VIOLATION');
     await expect(gateway.updateDeparture({ ...base, code: 'SAL-099' })).rejects.toThrow('NOT_FOUND');
   });
+  it('U·editing_back_and_forth_applies_every_save: A to B to A to B never answers a stale copy', async () => {
+    const { gateway, onSaved } = setup('SAL-025');
+    const start = await screen.findByLabelText('Hora de inicio programada');
+    const end = screen.getByLabelText('Hora de finalización estimada');
+    const startOf = async () => (await gateway.listDepartures()).find((d) => d.code === 'SAL-025')?.start.slice(11, 16);
+    const original = (start as HTMLInputElement).value;
+    let saves = 0;
+    for (const hour of ['10:00', original, '10:00']) {
+      fireEvent.change(start, { target: { value: hour } });
+      fireEvent.change(end, { target: { value: '16:00' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar salida' }));
+      saves += 1;
+      await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(saves));
+      expect(await startOf()).toBe(hour);
+    }
+  });
 });
