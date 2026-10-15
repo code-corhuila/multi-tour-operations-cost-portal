@@ -30,7 +30,11 @@ function App({ session, area }: MountProps) {
   const [departure, setDeparture] = useState<string>();
   const [fixture, setFixture] = useState<DepartureFixture>();
   const [view, setView] = useState<'operation' | 'departures'>(area === 'departures' ? 'departures' : 'operation');
-  useEffect(() => setView(area === 'departures' ? 'departures' : 'operation'), [area]);
+  useEffect(() => {
+    setView(area === 'departures' ? 'departures' : 'operation');
+    // A menu click leaves the execution page: the entry of the side menu always shows its own page.
+    setDeparture(undefined);
+  }, [area]);
   // The departure test data travel in the bundle only in development (spec 004 plan D-08, RN-OPS-PT-42).
   useEffect(() => {
     if (import.meta.env.DEV) {
