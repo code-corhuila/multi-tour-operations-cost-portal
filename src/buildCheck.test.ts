@@ -3,7 +3,17 @@ import { describe, expect, it } from 'vitest';
 // B·: the portal carries neither an HTTP client nor a gateway address (norm 5.4.1, RN-OPS-PT-06 and -43). It reads the
 // sources as text because they are exactly the files that become the bundle, and a build inside a unit test is slow.
 const sources = import.meta.glob(
-  ['./mount.tsx', './ops/OperationsPage.tsx', './ops/fixtureGateway.ts', './ops/departure/*.ts', './ops/departure/*.tsx', '!./ops/departure/*.test.*', './ops/departures/*.ts', './ops/departures/*.tsx', '!./ops/departures/*.test.*'],
+  [
+    './mount.tsx',
+    './ops/OperationsPage.tsx',
+    './ops/fixtureGateway.ts',
+    './ops/departure/*.ts',
+    './ops/departure/*.tsx',
+    '!./ops/departure/*.test.*',
+    './ops/departures/*.ts',
+    './ops/departures/*.tsx',
+    '!./ops/departures/*.test.*',
+  ],
   { query: '?raw', import: 'default', eager: true },
 ) as Record<string, string>;
 
