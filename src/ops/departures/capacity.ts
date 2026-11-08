@@ -2,7 +2,10 @@
 // transport and no vehicle has none; a tour without transport keeps its own.
 export function effectiveCapacity(tourCapacity: number, vehicleCapacities: number[], needsTransport: boolean): number {
   if (vehicleCapacities.length === 0) return needsTransport ? 0 : tourCapacity;
-  return Math.min(tourCapacity, vehicleCapacities.reduce((sum, capacity) => sum + capacity, 0));
+  return Math.min(
+    tourCapacity,
+    vehicleCapacities.reduce((sum, capacity) => sum + capacity, 0),
+  );
 }
 
 // Two scheduled intervals overlap when each starts before the other ends; touching ends do not (RN-OPS-PT-53).

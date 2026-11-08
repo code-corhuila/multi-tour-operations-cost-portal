@@ -7,8 +7,23 @@ import { createDeparturesGateway } from './scheduling';
 
 // Spec 006 PT6-03: the form over the mixed gateway (tours and scheduling from the service, the rest on test data).
 const catalog = (services: object[]) => ({ data: services, meta: { page: 1, limit: 100, total: services.length, totalPages: 1 } });
-const tour = (id: string, name: string, capacity: number, transport: boolean) => ({ serviceId: id, commercialName: name, configuredCapacity: capacity, transportRequired: transport });
-const created = { code: 'SAL-004', status: 'SCHEDULED', scheduledStart: '2026-12-01T13:00:00Z', scheduledEnd: '2026-12-01T19:00:00Z', capacity: 12, booked: 0, vehicles: [], reservations: [], novelties: [] };
+const tour = (id: string, name: string, capacity: number, transport: boolean) => ({
+  serviceId: id,
+  commercialName: name,
+  configuredCapacity: capacity,
+  transportRequired: transport,
+});
+const created = {
+  code: 'SAL-004',
+  status: 'SCHEDULED',
+  scheduledStart: '2026-12-01T13:00:00Z',
+  scheduledEnd: '2026-12-01T19:00:00Z',
+  capacity: 12,
+  booked: 0,
+  vehicles: [],
+  reservations: [],
+  novelties: [],
+};
 
 function setup(handler: (path: string, init?: { headers?: Record<string, string> }) => unknown | Promise<unknown>) {
   const request = vi.fn(async (path: string, init?: { headers?: Record<string, string> }) => handler(path, init));
@@ -86,7 +101,10 @@ describe('the connected form (spec 006)', () => {
     expect(onSaved.mock.calls[0][0]).not.toMatch(/HU-[A-Z]+-\d/);
     // Whether it can be reserved depends on commercial-reservation learning of the event: not known here.
     expect(onSaved.mock.calls[0][0]).not.toContain('Ya se puede reservar');
-    expect(posts()[0][1]).toMatchObject({ method: 'POST', body: { serviceId: 't-1', scheduledStart: '2026-12-01T13:00:00Z', scheduledEnd: '2026-12-01T19:00:00Z' } });
+    expect(posts()[0][1]).toMatchObject({
+      method: 'POST',
+      body: { serviceId: 't-1', scheduledStart: '2026-12-01T13:00:00Z', scheduledEnd: '2026-12-01T19:00:00Z' },
+    });
   });
 
   it('C·the_button_is_disabled_while_saving', async () => {
@@ -104,7 +122,9 @@ describe('the connected form (spec 006)', () => {
 
   it('C·a_retry_reuses_the_key_and_another_save_does_not', async () => {
     let calls = 0;
-    const { posts } = setup((path) => (path.includes('catalog') ? catalog(tours) : ++calls === 1 ? Promise.reject({ status: 503, code: 'SERVICE_UNAVAILABLE' }) : created));
+    const { posts } = setup((path) =>
+      path.includes('catalog') ? catalog(tours) : ++calls === 1 ? Promise.reject({ status: 503, code: 'SERVICE_UNAVAILABLE' }) : created,
+    );
     await fill();
     save();
     expect(await screen.findByText(/El servicio no responde/)).toBeInTheDocument();
@@ -137,7 +157,16 @@ describe('the connected form (spec 006)', () => {
   });
 
   it('C·the_other_named_fields_and_an_unmapped_one', async () => {
-    setup(reject({ status: 400, code: 'VALIDATION_ERROR', details: [{ field: 'serviceId', message: 'x' }, { field: 'scheduledStart', message: 'y' }] }));
+    setup(
+      reject({
+        status: 400,
+        code: 'VALIDATION_ERROR',
+        details: [
+          { field: 'serviceId', message: 'x' },
+          { field: 'scheduledStart', message: 'y' },
+        ],
+      }),
+    );
     await fill();
     save();
     await waitFor(() => expect(screen.getByLabelText('Tour')).toHaveAccessibleDescription('El tour no es válido.'));
