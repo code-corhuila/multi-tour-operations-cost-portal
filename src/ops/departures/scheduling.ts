@@ -1,5 +1,17 @@
 import type { ApiClient } from '../../contract';
-import { FieldError, Failed, Forbidden, Refused, Unavailable, type DepartureRow, type DeparturesGateway, type ScheduleInput, type Tour } from './model';
+import {
+  FieldError,
+  Failed,
+  Forbidden,
+  Refused,
+  Unavailable,
+  type DepartureRow,
+  type DeparturesGateway,
+  type ScheduleInput,
+  type Tour,
+  type Vehicle,
+  type VehicleInput,
+} from './model';
 import { TENANT_TIME_ZONE, toInstant } from './time';
 
 interface Failure {
@@ -25,6 +37,14 @@ interface CatalogPage {
   meta: { totalPages: number };
 }
 
+interface VehiclePage {
+  data: { vehicleId: string; name: string; capacity: number }[];
+  meta: { totalPages: number };
+}
+
+const asVehicle = (v: { vehicleId: string; name: string; capacity: number }): Vehicle => ({ id: v.vehicleId, name: v.name, capacity: v.capacity });
+const VEHICLES = '/api/v1/operations-cost/vehicles';
+
 // shortcut: past 5 pages (500 tours) the list is cut without a signal; raise it if a tenant ever has that many.
 const MAX_PAGES = 5;
 const CATALOG = '/api/v1/commercial-reservation/catalog/services?serviceType=TOUR&catalogStatus=ACTIVE&limit=100';
@@ -33,7 +53,33 @@ const CATALOG = '/api/v1/commercial-reservation/catalog/services?serviceType=TOU
 export function createDeparturesGateway(apiClient: ApiClient, rest: DeparturesGateway): DeparturesGateway {
   return {
     ...rest,
+    connected: true,
     supportsVehicles: false,
+    async listVehicles() {
+      const vehicles: Vehicle[] = [];
+      try {
+        for (let page = 1; page <= MAX_PAGES; page++) {
+          const answer = await apiClient.request<VehiclePage>(`${VEHICLES}?limit=100&page=${page}`);
+          vehicles.push(...answer.data.map(asVehicle));
+          if (page >= answer.meta.totalPages) break;
+        }
+      } catch (error) {
+        throw translate(error);
+      }
+      return vehicles;
+    },
+    async createVehicle({ name, capacity, key }: VehicleInput): Promise<Vehicle> {
+      try {
+        const answer = await apiClient.request<{ vehicleId: string; name: string; capacity: number }>(VEHICLES, {
+          method: 'POST',
+          headers: { 'Idempotency-Key': key },
+          body: { name, capacity },
+        });
+        return asVehicle(answer);
+      } catch (error) {
+        throw translate(error);
+      }
+    },
     async listTours() {
       const tours: Tour[] = [];
       try {

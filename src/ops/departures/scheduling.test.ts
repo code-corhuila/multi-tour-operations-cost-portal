@@ -91,7 +91,6 @@ describe('scheduling', () => {
     const { client, calls } = fakeClient(() => created);
     const gateway = createDeparturesGateway(client, createDeparturesFixture());
     expect((await gateway.listDepartures()).length).toBeGreaterThan(0);
-    expect((await gateway.listVehicles()).length).toBeGreaterThan(0);
     expect(calls).toHaveLength(0);
   });
 });
