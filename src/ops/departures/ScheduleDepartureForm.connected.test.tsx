@@ -81,6 +81,8 @@ describe('the connected form (spec 006)', () => {
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
     expect(onSaved.mock.calls[0][0]).toContain('Salida SAL-004 programada (Cañón del río, 2026-12-01 08:00). Capacidad: 12.');
     expect(onSaved.mock.calls[0][0]).toContain('La lista muestra datos de prueba');
+    // Whether it can be reserved depends on commercial-reservation learning of the event: not known here.
+    expect(onSaved.mock.calls[0][0]).not.toContain('Ya se puede reservar');
     expect(posts()[0][1]).toMatchObject({ method: 'POST', body: { serviceId: 't-1', scheduledStart: '2026-12-01T13:00:00Z', scheduledEnd: '2026-12-01T19:00:00Z' } });
   });
 

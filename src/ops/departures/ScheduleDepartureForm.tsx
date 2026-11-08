@@ -115,7 +115,7 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
         ? await gateway.updateDeparture({ code: editCode, tourId: current.tourId, start, end, vehicleIds: current.vehicleIds, key })
         : await gateway.scheduleDeparture({ tourId: current.tourId, start, end, vehicleIds: current.vehicleIds, key });
       const verb = editCode ? 'actualizada' : 'programada';
-      const tail = editCode ? '' : ' Ya se puede reservar.';
+      const tail = editCode || !withVehicles ? '' : ' Ya se puede reservar.';
       const note = withVehicles ? '' : ' La lista muestra datos de prueba hasta que se conecte (HU-OPS-003).';
       attempt.current = undefined;
       onSaved(`Salida ${saved.code} ${verb} (${tour.name}, ${start.replace('T', ' ')}). ${withVehicles ? 'Capacidad efectiva' : 'Capacidad'}: ${capacity}.${tail}${note}`);
