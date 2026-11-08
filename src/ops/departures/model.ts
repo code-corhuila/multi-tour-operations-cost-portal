@@ -46,6 +46,8 @@ export interface UpdateInput extends ScheduleInput {
 }
 
 export interface DeparturesGateway {
+  // False when the service does not take vehicles yet (HU-OPS-002): the form then offers none. Absent means true.
+  supportsVehicles?: boolean;
   listDepartures(): Promise<DepartureRow[]>;
   listTours(): Promise<Tour[]>;
   listVehicles(): Promise<Vehicle[]>;

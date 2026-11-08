@@ -16,12 +16,14 @@ export interface Context {
   tours: Tour[];
   vehicles: Vehicle[];
   departures: DepartureRow[];
+  // False when the gateway takes no vehicles: the rules of transport do not apply.
+  withVehicles?: boolean;
 }
 
 export const interval = (form: Pick<DepartureForm, 'date' | 'start' | 'end'>) => ({ start: `${form.date}T${form.start}`, end: `${form.date}T${form.end}` });
 
 // The rules of the form as a list of messages, like the Mockup (RN-OPS-PT-50 to -55). The service decides for real.
-export function validateDeparture(form: DepartureForm, { tours, vehicles, departures }: Context): string[] {
+export function validateDeparture(form: DepartureForm, { tours, vehicles, departures, withVehicles = true }: Context): string[] {
   const messages: string[] = [];
   const tour = tours.find((t) => t.id === form.tourId);
   if (!tour) messages.push('Selecciona un tour.');
@@ -30,7 +32,7 @@ export function validateDeparture(form: DepartureForm, { tours, vehicles, depart
   if (!form.end) messages.push('Ingresa la hora de finalización estimada.');
   if (form.start && form.end && form.end <= form.start) messages.push('La hora de finalización estimada debe ser posterior al inicio.');
   if (tour && tour.capacity < 1) messages.push('El cupo del tour debe ser de al menos 1 viajero.');
-  if (tour?.needsTransport && form.vehicleIds.length === 0) messages.push('El tour con transporte asociado requiere al menos un vehículo.');
+  if (withVehicles && tour?.needsTransport && form.vehicleIds.length === 0) messages.push('El tour con transporte asociado requiere al menos un vehículo.');
 
   const chosen = vehicles.filter((v) => form.vehicleIds.includes(v.id));
   if (form.date && form.start && form.end && form.end > form.start) {
