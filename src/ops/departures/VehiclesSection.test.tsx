@@ -153,4 +153,36 @@ describe('the vehicles section', () => {
     expect(items[0]).toContain('Bote 02');
     expect(items[1]).toContain('Van VAN-204');
   });
+
+  it('C·only_the_rule_code_of_a_used_name_says_the_name_is_used: any other refusal is a general error', async () => {
+    const create = vi.fn().mockRejectedValue(new Refused('INVALID_STATUS_TRANSITION'));
+    render(<VehiclesSection gateway={gatewayOf({ createVehicle: create })} />);
+    await screen.findByText(/Van VAN-204/);
+    fill('Van 2', '12');
+    save();
+    expect(await screen.findByText('No pudimos registrar el vehículo. Tus datos siguen aquí.')).toBeInTheDocument();
+    expect(screen.queryByText('Ya existe un vehículo con ese nombre.')).not.toBeInTheDocument();
+  });
+
+  it('C·the_list_is_sorted_by_name_also_when_it_is_first_drawn', async () => {
+    const list = async () => [van, { id: 'v-0', name: 'Bote 02', capacity: 10 }];
+    render(<VehiclesSection gateway={gatewayOf({ listVehicles: list })} />);
+    await screen.findByText(/Van VAN-204/);
+    const items = within(screen.getByRole('list')).getAllByRole('listitem').map((li) => li.textContent);
+    expect(items[0]).toContain('Bote 02');
+  });
+
+  it('C·a_vehicle_registered_while_the_list_is_still_loading_is_not_lost', async () => {
+    let releaseFirst!: (v: Vehicle[]) => void;
+    const list = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise<Vehicle[]>((resolve) => (releaseFirst = resolve)))
+      .mockResolvedValue([van, { id: 'v-9', name: 'Van 2', capacity: 12 }]);
+    render(<VehiclesSection gateway={gatewayOf({ listVehicles: list })} />);
+    fill('Van 2', '12');
+    save();
+    await screen.findByText('Vehículo registrado.');
+    releaseFirst([van]);
+    expect(await screen.findByText(/Van 2 ·/)).toBeInTheDocument();
+  });
 });
