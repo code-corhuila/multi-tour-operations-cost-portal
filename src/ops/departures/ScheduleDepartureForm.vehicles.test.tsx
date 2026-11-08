@@ -35,7 +35,7 @@ const created = {
 type Init = { method?: string; headers?: Record<string, string>; body?: Record<string, unknown> };
 
 function setup(onSchedule: () => unknown = () => created) {
-  const request = vi.fn(async (path: string, init?: Init) => {
+  const request = vi.fn(async (path: string, _init?: Init) => {
     if (path.includes('catalog')) return page(tours);
     if (path.includes('/vehicles')) return page(vehicles);
     return onSchedule();
