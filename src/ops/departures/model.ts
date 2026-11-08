@@ -55,3 +55,38 @@ export interface DeparturesGateway {
   updateDeparture(input: UpdateInput): Promise<DepartureRow>;
   cancelDeparture(input: CancelInput): Promise<{ departure: DepartureRow; reservationsToReschedule: number }>;
 }
+
+// Typed failures of the port (spec 006 D-04). The form turns each into its own Spanish text; the body of an answer
+// and the trace id are never shown. `FieldError.fields` use the names of the request (`scheduledStart`, `scheduledEnd`,
+// `serviceId`, `timeZone`); the form maps them to its own fields. A 422 carries only the `code` of the envelope: the
+// container replaces the message of the service by its own generic one.
+export class FieldError extends Error {
+  override readonly name = 'FieldError';
+  constructor(readonly fields: { field: string; message: string }[]) {
+    super('Some data must be corrected.');
+  }
+}
+export class Refused extends Error {
+  override readonly name = 'Refused';
+  constructor(readonly code: string) {
+    super('The service did not accept the request.');
+  }
+}
+export class Forbidden extends Error {
+  override readonly name = 'Forbidden';
+  constructor() {
+    super('Not allowed.');
+  }
+}
+export class Unavailable extends Error {
+  override readonly name = 'Unavailable';
+  constructor() {
+    super('The service does not answer.');
+  }
+}
+export class Failed extends Error {
+  override readonly name = 'Failed';
+  constructor() {
+    super('The request failed.');
+  }
+}
