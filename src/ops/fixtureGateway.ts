@@ -8,7 +8,16 @@ export function createFixtureGateway(): OperationsGateway {
     { reservationId: 'RES-1003', date: '2026-10-21', service: 'Observación de aves', status: 'PENDING' },
   ];
   const executions: Execution[] = [
-    { reservationId: 'RES-0990', date: '2026-10-10', service: 'Caminata al cañón del río', reserved: 6, executed: 6, cause: '—', status: 'IN_PROGRESS', responsible: 'Operador demo' },
+    {
+      reservationId: 'RES-0990',
+      date: '2026-10-10',
+      service: 'Caminata al cañón del río',
+      reserved: 6,
+      executed: 6,
+      cause: '—',
+      status: 'IN_PROGRESS',
+      responsible: 'Operador demo',
+    },
   ];
 
   return {
