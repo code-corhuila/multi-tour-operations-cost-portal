@@ -1,5 +1,6 @@
-// Port of the screens "Salidas" and "Programar salida" to the operations-cost service (spec 005 plan D-01). Only the
-// test-data adapter exists: the contract has `GET /departures` and nothing to schedule or cancel yet (spec G-1).
+// Port of the screens "Salidas" and "Programar salida" to the operations-cost service (spec 005 plan D-01). Two adapters:
+// the test data (`fixture.ts`) answers everything, and `scheduling.ts` answers the tours and the scheduling of a new
+// departure from the service (spec 006); the list, the edit and the cancellation have no route yet (HU-OPS-003, HU-OPS-006).
 export type DepartureStatus = 'SCHEDULED' | 'IN_EXECUTION' | 'PENDING_REGULARIZATION' | 'FINISHED' | 'CANCELLED';
 
 export interface Tour {
@@ -51,10 +52,10 @@ export interface DeparturesGateway {
   listDepartures(): Promise<DepartureRow[]>;
   listTours(): Promise<Tour[]>;
   listVehicles(): Promise<Vehicle[]>;
-  // Only a SCHEDULED departure is cancelled; the answer says how many reservations open their rescheduling.
   scheduleDeparture(input: ScheduleInput): Promise<DepartureRow>;
   // Only a SCHEDULED departure is edited; with reservations its date, hours and tour stay (RN-OPS-PT-56).
   updateDeparture(input: UpdateInput): Promise<DepartureRow>;
+  // Only a SCHEDULED departure is cancelled; the answer says how many reservations open their rescheduling.
   cancelDeparture(input: CancelInput): Promise<{ departure: DepartureRow; reservationsToReschedule: number }>;
 }
 

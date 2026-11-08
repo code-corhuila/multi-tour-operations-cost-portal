@@ -41,7 +41,7 @@ const FieldMessage = ({ id, text }: { id: string; text?: string }) =>
     </p>
   ) : null;
 
-// Form of the Mockup admin-programar-salida.html (spec 005 PT-11) over the test data of the port.
+// Form of the Mockup admin-programar-salida.html (spec 005 PT-11) over the port: the test data, or the service for a new departure (spec 006).
 export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: ScheduleDepartureFormProps) {
   const load = useCallback(async () => {
     const [tours, vehicles, departures] = await Promise.all([gateway.listTours(), gateway.listVehicles(), gateway.listDepartures()]);
