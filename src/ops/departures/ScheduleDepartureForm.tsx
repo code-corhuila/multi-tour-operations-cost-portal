@@ -126,7 +126,7 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const found = validateDeparture({ ...current, editingCode: editCode }, { tours, vehicles, departures, withVehicles });
+    const found = validateDeparture({ ...current, vehicleIds: chosen.map((v) => v.id), editingCode: editCode }, { tours, vehicles, departures, withVehicles });
     setMessages(found);
     setFieldErrors({});
     if (found.length > 0 || !tour) return;
