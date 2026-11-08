@@ -34,13 +34,13 @@ const created = {
 };
 type Init = { method?: string; headers?: Record<string, string>; body?: Record<string, unknown> };
 
-function setup(onSchedule: () => unknown = () => created) {
+function setup(onSchedule: () => unknown = () => created, rest = createDeparturesFixture()) {
   const request = vi.fn(async (path: string, _init?: Init) => {
     if (path.includes('catalog')) return page(tours);
     if (path.includes('/vehicles')) return page(vehicles);
     return onSchedule();
   });
-  const gateway = createDeparturesGateway({ request } as unknown as ApiClient, createDeparturesFixture());
+  const gateway = createDeparturesGateway({ request } as unknown as ApiClient, rest);
   const onSaved = vi.fn();
   render(<ScheduleDepartureForm gateway={gateway} onBack={vi.fn()} onSaved={onSaved} />);
   const posts = () => request.mock.calls.filter(([path, init]) => path.includes('/departures') && init?.method === 'POST');
@@ -129,5 +129,29 @@ describe('the connected form with vehicles (spec 007)', () => {
     expect(await screen.findByText(/un vehículo ya está en otra salida a esa hora/)).toBeInTheDocument();
     expect(onSaved).not.toHaveBeenCalled();
     expect(screen.getByRole('checkbox', { name: /Van VAN-204/ })).toBeChecked();
+  });
+
+  it('C·a_vehicle_ticked_before_the_tour_changed_to_one_without_transport_does_not_block_the_save', async () => {
+    const busy = {
+      code: 'SAL-009',
+      tourId: 't-2',
+      start: '2026-12-01T09:00',
+      end: '2026-12-01T12:00',
+      vehicleIds: ['v-1'],
+      booked: 0,
+      reservations: 0,
+      status: 'SCHEDULED' as const,
+    };
+    const { posts, onSaved } = setup(() => ({ ...created, capacity: 12, vehicles: [], vehicleCapacity: 0, transportRequired: false }), {
+      ...createDeparturesFixture(),
+      listDepartures: async () => [busy],
+    });
+    await fill('t-2');
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Van VAN-204/ }));
+    fireEvent.change(screen.getByLabelText('Tour'), { target: { value: 't-1' } });
+    save();
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText(/ya está asignado a SAL-009/)).not.toBeInTheDocument();
+    expect(posts()).toHaveLength(1);
   });
 });
