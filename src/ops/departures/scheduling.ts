@@ -33,6 +33,7 @@ const CATALOG = '/api/v1/commercial-reservation/catalog/services?serviceType=TOU
 export function createDeparturesGateway(apiClient: ApiClient, rest: DeparturesGateway): DeparturesGateway {
   return {
     ...rest,
+    supportsVehicles: false,
     async listTours() {
       const tours: Tour[] = [];
       try {
