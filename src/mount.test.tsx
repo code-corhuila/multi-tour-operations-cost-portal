@@ -3,9 +3,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { mount } from './mount';
 import type { ApiClient, MountProps } from './contract';
 
-const catalog = { data: [{ serviceId: 'svc-1', commercialName: 'Cañón del río', configuredCapacity: 12, transportRequired: false }], meta: { page: 1, limit: 100, total: 1, totalPages: 1 } };
+const catalog = {
+  data: [{ serviceId: 'svc-1', commercialName: 'Cañón del río', configuredCapacity: 12, transportRequired: false }],
+  meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
+};
 const created = { code: 'SAL-031', status: 'SCHEDULED', scheduledStart: '2026-12-01T13:00:00Z', scheduledEnd: '2026-12-01T19:00:00Z', capacity: 12, booked: 0 };
-const request = () => vi.fn(async (path: string) => (path.includes('catalog') ? catalog : created)) as unknown as ApiClient['request'] & ReturnType<typeof vi.fn>;
+const request = () =>
+  vi.fn(async (path: string) => (path.includes('catalog') ? catalog : created)) as unknown as ApiClient['request'] & ReturnType<typeof vi.fn>;
 
 const props = (roles: string[], apiClient = { request: request() }): MountProps => ({
   apiClient,

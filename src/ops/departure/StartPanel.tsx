@@ -27,10 +27,9 @@ export function StartPanel({ departure, gateway, canManage, onChanged }: PanelPr
       <p className="operator-eyebrow">Inicio de la salida</p>
       <h2 id="start-title">Registrar el inicio real</h2>
       <p className="operator-copy">
-        Se registra después del control operativo previo realizado por el guía. El inicio real no puede ser anterior a la hora
-        programada. Al registrarlo pasan a En ejecución las reservas Confirmadas con Pago completo; las que tengan pagos o saldos
-        pendientes, o un comprobante aún En validación, se cancelan por incumplimiento del pago y liberan su cupo. Un retraso en el
-        inicio no extiende los plazos económicos.
+        Se registra después del control operativo previo realizado por el guía. El inicio real no puede ser anterior a la hora programada. Al registrarlo pasan
+        a En ejecución las reservas Confirmadas con Pago completo; las que tengan pagos o saldos pendientes, o un comprobante aún En validación, se cancelan por
+        incumplimiento del pago y liberan su cupo. Un retraso en el inicio no extiende los plazos económicos.
       </p>
       <form className="operator-form-grid" onSubmit={send} noValidate>
         <div>
