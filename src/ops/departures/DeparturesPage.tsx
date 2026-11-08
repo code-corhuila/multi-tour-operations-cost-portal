@@ -68,7 +68,13 @@ export function DeparturesPage({ gateway, canSchedule, canManage, onOpen, onSche
   const vehiclesOf = (d: DepartureRow) => (data?.vehicles ?? []).filter((v) => d.vehicleIds.includes(v.id));
   const capacityOf = (d: DepartureRow) => {
     const tour = tourOf(d);
-    return tour ? effectiveCapacity(tour.capacity, vehiclesOf(d).map((v) => v.capacity), tour.needsTransport) : 0;
+    return tour
+      ? effectiveCapacity(
+          tour.capacity,
+          vehiclesOf(d).map((v) => v.capacity),
+          tour.needsTransport,
+        )
+      : 0;
   };
 
   async function confirmCancel(event: FormEvent, current: DepartureRow) {
@@ -112,8 +118,8 @@ export function DeparturesPage({ gateway, canSchedule, canManage, onOpen, onSche
       </header>
       <section className="operator-hero operator-hero-compact">
         <p>
-          Una salida es la ejecución programada de un tour con fecha, hora de inicio y hora de finalización estimada. Su capacidad efectiva
-          y sus cupos apartados se leen aquí.
+          Una salida es la ejecución programada de un tour con fecha, hora de inicio y hora de finalización estimada. Su capacidad efectiva y sus cupos
+          apartados se leen aquí.
         </p>
         <p className="operator-eyebrow">Datos de prueba</p>
       </section>
@@ -151,16 +157,32 @@ export function DeparturesPage({ gateway, canSchedule, canManage, onOpen, onSche
       {cancelTarget && (
         <section className="operator-panel" aria-labelledby="dep-cancel">
           <h2 id="dep-cancel">
-            Cancelar {cancelTarget.code} · {tourOf(cancelTarget)?.name} · {cancelTarget.start.slice(0, 10)} ({plural(cancelTarget.booked, 'cupo apartado', 'cupos apartados')})
+            Cancelar {cancelTarget.code} · {tourOf(cancelTarget)?.name} · {cancelTarget.start.slice(0, 10)} (
+            {plural(cancelTarget.booked, 'cupo apartado', 'cupos apartados')})
           </h2>
           <form onSubmit={(e) => confirmCancel(e, cancelTarget)} noValidate>
             <label htmlFor="dep-cause">Causal de la cancelación (obligatoria)</label>
-            <textarea id="dep-cause" rows={3} value={cause} onChange={(e) => setCause(e.target.value)} aria-describedby={error ? 'dep-cause-error' : undefined} aria-invalid={error ? true : undefined} />
+            <textarea
+              id="dep-cause"
+              rows={3}
+              value={cause}
+              onChange={(e) => setCause(e.target.value)}
+              aria-describedby={error ? 'dep-cause-error' : undefined}
+              aria-invalid={error ? true : undefined}
+            />
             <p id="dep-cause-error" className="operator-error" role="alert">
               {error}
             </p>
             <div className="operator-form-actions">
-              <button type="button" className="operator-outline" onClick={() => { setCancelling(undefined); setError(undefined); setCause(''); }}>
+              <button
+                type="button"
+                className="operator-outline"
+                onClick={() => {
+                  setCancelling(undefined);
+                  setError(undefined);
+                  setCause('');
+                }}
+              >
                 No cancelar
               </button>
               <button type="submit" className="operator-primary" disabled={sending}>
@@ -170,7 +192,11 @@ export function DeparturesPage({ gateway, canSchedule, canManage, onOpen, onSche
           </form>
         </section>
       )}
-      {result && <p className="operator-form-feedback" role="status">{result}</p>}
+      {result && (
+        <p className="operator-form-feedback" role="status">
+          {result}
+        </p>
+      )}
 
       {data && (
         <section className="operator-panel" aria-labelledby="dep-agenda">
@@ -217,7 +243,11 @@ export function DeparturesPage({ gateway, canSchedule, canManage, onOpen, onSche
                       </td>
                       <td>{when(d.start)}</td>
                       <td>{when(d.end)}</td>
-                      <td>{vehiclesOf(d).map((v) => v.name).join(', ') || 'Sin vehículos'}</td>
+                      <td>
+                        {vehiclesOf(d)
+                          .map((v) => v.name)
+                          .join(', ') || 'Sin vehículos'}
+                      </td>
                       <td>{capacityOf(d)}</td>
                       <td>{d.booked}</td>
                       <td>
@@ -230,7 +260,15 @@ export function DeparturesPage({ gateway, canSchedule, canManage, onOpen, onSche
                           </button>
                         )}
                         {d.status === 'SCHEDULED' && canSchedule && (
-                          <button type="button" className="operator-outline" onClick={() => { setCancelling(d.code); setResult(undefined); setError(undefined); }}>
+                          <button
+                            type="button"
+                            className="operator-outline"
+                            onClick={() => {
+                              setCancelling(d.code);
+                              setResult(undefined);
+                              setError(undefined);
+                            }}
+                          >
                             Cancelar salida
                           </button>
                         )}

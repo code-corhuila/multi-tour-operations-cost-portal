@@ -9,7 +9,7 @@ type Call = { path: string; init?: { method?: string; body?: unknown; headers?: 
 function fakeClient(answer: (call: Call) => unknown): { client: ApiClient; calls: Call[] } {
   const calls: Call[] = [];
   const client: ApiClient = {
-    request: async <T,>(path: string, init?: Call['init']) => {
+    request: async <T>(path: string, init?: Call['init']) => {
       const call = { path, init };
       calls.push(call);
       return answer(call) as T;
@@ -21,7 +21,17 @@ function fakeClient(answer: (call: Call) => unknown): { client: ApiClient; calls
 const service = (n: number) => ({ serviceId: `id-${n}`, commercialName: `Tour ${n}`, configuredCapacity: 10 + n, transportRequired: n % 2 === 0 });
 const page = (items: unknown[], p: number, totalPages: number) => ({ data: items, meta: { page: p, limit: 100, total: items.length, totalPages } });
 const input = { tourId: 'id-1', start: '2026-12-01T08:00', end: '2026-12-01T14:00', vehicleIds: [], key: 'schedule:abcdefgh' };
-const created = { code: 'SAL-004', status: 'SCHEDULED', scheduledStart: '2026-12-01T13:00:00Z', scheduledEnd: '2026-12-01T19:00:00Z', capacity: 11, booked: 0, vehicles: [], reservations: [], novelties: [] };
+const created = {
+  code: 'SAL-004',
+  status: 'SCHEDULED',
+  scheduledStart: '2026-12-01T13:00:00Z',
+  scheduledEnd: '2026-12-01T19:00:00Z',
+  capacity: 11,
+  booked: 0,
+  vehicles: [],
+  reservations: [],
+  novelties: [],
+};
 
 const failing = (error: unknown) => createDeparturesGateway({ request: () => Promise.reject(error) } as unknown as ApiClient, createDeparturesFixture());
 
@@ -89,13 +99,18 @@ describe('scheduling', () => {
 describe('the errors', () => {
   it('C·a_400_names_the_field', async () => {
     const error = { status: 400, code: 'VALIDATION_ERROR', message: 'x', traceId: 't1', details: [{ field: 'scheduledEnd', message: 'before start' }] };
-    const caught = await failing(error).scheduleDeparture(input).catch((e) => e);
+    const caught = await failing(error)
+      .scheduleDeparture(input)
+      .catch((e) => e);
     expect(caught).toBeInstanceOf(FieldError);
     expect(caught.fields).toEqual([{ field: 'scheduledEnd', message: 'before start' }]);
   });
 
   it('C·each_status_has_its_message', async () => {
-    const as = (error: unknown) => failing(error).scheduleDeparture(input).catch((e) => e);
+    const as = (error: unknown) =>
+      failing(error)
+        .scheduleDeparture(input)
+        .catch((e) => e);
     expect(await as({ status: 422, code: 'BUSINESS_RULE_VIOLATION' })).toMatchObject({ name: 'Refused', code: 'BUSINESS_RULE_VIOLATION' });
     expect(await as({ status: 422, code: 'INVALID_STATUS_TRANSITION' })).toBeInstanceOf(Refused);
     expect(await as({ status: 400, code: 'VALIDATION_ERROR' })).toMatchObject({ name: 'FieldError', fields: [] });
@@ -113,13 +128,16 @@ describe('the errors', () => {
 
   it('A·a_400_keeps_only_the_details_that_name_a_field', async () => {
     const caught = await failing({ status: 400, code: 'VALIDATION_ERROR', details: [{ field: 'timeZone', message: 'unknown' }, { message: 'no field' }] })
-      .scheduleDeparture(input).catch((e) => e);
+      .scheduleDeparture(input)
+      .catch((e) => e);
     expect(caught.fields).toEqual([{ field: 'timeZone', message: 'unknown' }]);
   });
 
   it('A·a_wall_clock_that_cannot_be_converted_fails_without_calling_the_service', async () => {
     const { client, calls } = fakeClient(() => created);
-    const caught = await createDeparturesGateway(client, createDeparturesFixture()).scheduleDeparture({ ...input, start: 'tomorrow' }).catch((e) => e);
+    const caught = await createDeparturesGateway(client, createDeparturesFixture())
+      .scheduleDeparture({ ...input, start: 'tomorrow' })
+      .catch((e) => e);
     expect(caught).toBeInstanceOf(Failed);
     expect(calls).toHaveLength(0);
   });
@@ -136,7 +154,9 @@ describe('the errors', () => {
 
   it('A·the_body_and_the_trace_are_never_in_the_message_but_the_trace_goes_to_the_console', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const caught = await failing({ status: 500, code: 'INTERNAL_ERROR', message: 'stack at db.Host', traceId: 'trace-77' }).scheduleDeparture(input).catch((e) => e);
+    const caught = await failing({ status: 500, code: 'INTERNAL_ERROR', message: 'stack at db.Host', traceId: 'trace-77' })
+      .scheduleDeparture(input)
+      .catch((e) => e);
     expect(caught.message).not.toMatch(/stack|db\.Host|trace-77/);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('trace-77'));
     warn.mockRestore();
