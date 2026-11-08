@@ -116,7 +116,7 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
         : await gateway.scheduleDeparture({ tourId: current.tourId, start, end, vehicleIds: current.vehicleIds, key });
       const verb = editCode ? 'actualizada' : 'programada';
       const tail = editCode || !withVehicles ? '' : ' Ya se puede reservar.';
-      const note = withVehicles ? '' : ' La lista muestra datos de prueba hasta que se conecte (HU-OPS-003).';
+      const note = withVehicles ? '' : ' La lista muestra datos de prueba hasta que se conecte.';
       attempt.current = undefined;
       onSaved(`Salida ${saved.code} ${verb} (${tour.name}, ${start.replace('T', ' ')}). ${withVehicles ? 'Capacidad efectiva' : 'Capacidad'}: ${capacity}.${tail}${note}`);
     } catch (error) {
@@ -204,7 +204,7 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
           <section className="operator-panel" aria-labelledby="sch-02">
             <p className="operator-eyebrow">02 · Vehículos asignados</p>
             <h2 id="sch-02">Vehículos</h2>
-            <p className="operator-copy">Los vehículos se asignan después (HU-OPS-002).</p>
+            <p className="operator-copy">Los vehículos se asignan después.</p>
             {tour?.needsTransport && (
               <p className="operator-access-note">Este tour usa transporte: su capacidad es la del tour hasta que se asignen los vehículos.</p>
             )}
