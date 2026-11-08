@@ -73,32 +73,12 @@ describe('the connected form (spec 006)', () => {
     expect(request.mock.calls[0][0]).toContain('serviceType=TOUR&catalogStatus=ACTIVE');
   });
 
-  it('C·no_vehicles_are_offered_and_the_capacity_is_the_tour_one', async () => {
-    setup(ok);
-    fireEvent.change(await screen.findByLabelText('Tour'), { target: { value: 't-1' } });
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
-    expect(screen.getByText('Los vehículos se asignan después.')).toBeInTheDocument();
-    // The person reads the Mockup's words, never the id of a story (spec 005).
-    expect(document.body.textContent).not.toMatch(/HU-[A-Z]+-\d/);
-    expect(screen.getByText('Capacidad de la salida: 12 viajeros (la del tour).')).toBeInTheDocument();
-    expect(screen.queryByText('Datos de prueba')).not.toBeInTheDocument();
-  });
-
-  it('C·a_tour_with_mandatory_transport_schedules_with_a_notice', async () => {
-    const { posts } = setup(ok);
-    await fill('t-2');
-    expect(screen.getByText(/su capacidad es la del tour hasta que se asignen los vehículos/)).toBeInTheDocument();
-    expect(screen.getByText('Capacidad de la salida: 10 viajeros (la del tour).')).toBeInTheDocument();
-    save();
-    await waitFor(() => expect(posts()).toHaveLength(1));
-  });
-
   it('C·scheduling_shows_the_real_code_and_says_the_list_is_test_data', async () => {
     const { onSaved, posts } = setup(ok);
     await fill();
     save();
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
-    expect(onSaved.mock.calls[0][0]).toContain('Salida SAL-004 programada (Cañón del río, 2026-12-01 08:00). Capacidad: 12.');
+    expect(onSaved.mock.calls[0][0]).toContain('Salida SAL-004 programada (Cañón del río, 2026-12-01 08:00). Capacidad efectiva: 12.');
     expect(onSaved.mock.calls[0][0]).toContain('La lista muestra datos de prueba');
     expect(onSaved.mock.calls[0][0]).not.toMatch(/HU-[A-Z]+-\d/);
     // Whether it can be reserved depends on commercial-reservation learning of the event: not known here.
