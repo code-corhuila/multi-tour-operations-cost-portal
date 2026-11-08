@@ -168,7 +168,9 @@ describe('the vehicles section', () => {
     const list = async () => [van, { id: 'v-0', name: 'Bote 02', capacity: 10 }];
     render(<VehiclesSection gateway={gatewayOf({ listVehicles: list })} />);
     await screen.findByText(/Van VAN-204/);
-    const items = within(screen.getByRole('list')).getAllByRole('listitem').map((li) => li.textContent);
+    const items = within(screen.getByRole('list'))
+      .getAllByRole('listitem')
+      .map((li) => li.textContent);
     expect(items[0]).toContain('Bote 02');
   });
 

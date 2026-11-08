@@ -17,7 +17,8 @@ function failure(error: unknown): { general?: string; fields: Partial<Record<Fie
     for (const { field } of error.fields) if (field === 'name' || field === 'capacity') fields[field] = FIELD_MESSAGE[field];
     return Object.keys(fields).length > 0 ? { fields } : { general: 'Revisa los datos del vehículo.', fields };
   }
-  if (error instanceof Refused) return { fields: { name: 'Ya existe un vehículo con ese nombre.' } };
+  // the contract refuses a vehicle with 422 BUSINESS_RULE_VIOLATION only for a name already used
+  if (error instanceof Refused && error.code === 'BUSINESS_RULE_VIOLATION') return { fields: { name: 'Ya existe un vehículo con ese nombre.' } };
   if (error instanceof Forbidden) return { general: 'No tienes permiso para registrar vehículos.', fields: {} };
   if (error instanceof Unavailable) return { general: 'El servicio no responde. Tus datos siguen aquí; intenta de nuevo.', fields: {} };
   return { general: 'No pudimos registrar el vehículo. Tus datos siguen aquí.', fields: {} };
@@ -26,7 +27,7 @@ function failure(error: unknown): { general?: string; fields: Partial<Record<Fie
 // Section "Vehículos" of the departures page (portal spec 007, AC-PT-07.1 and -07.2): the vehicles of the tenant and the form to
 // register one. Drawn only when the gateway can register, that is, when it is the connected one.
 export function VehiclesSection({ gateway }: { gateway: DeparturesGateway }) {
-  const load = useCallback(() => gateway.listVehicles(), [gateway]);
+  const load = useCallback(async () => (await gateway.listVehicles()).sort(byName), [gateway]);
   const { state, retry, set } = useAsync(load);
   const [name, setName] = useState('');
   const [capacity, setCapacity] = useState('');
@@ -56,7 +57,9 @@ export function VehiclesSection({ gateway }: { gateway: DeparturesGateway }) {
       if (attempt.current?.signature !== signature) attempt.current = { signature, key: `vehicle:${crypto.randomUUID()}` };
       const created = await create({ name: trimmed, capacity: amount, key: attempt.current.key });
       attempt.current = undefined;
+      // a list still loading is read again, so the new vehicle is not lost behind an older answer
       if (state.kind === 'data') set([...state.data.filter((v) => v.id !== created.id), created].sort(byName));
+      else retry();
       setName('');
       setCapacity('');
       setDone(true);
