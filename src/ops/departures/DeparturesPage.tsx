@@ -2,6 +2,7 @@ import { useCallback, useState, type FormEvent } from 'react';
 import { effectiveCapacity } from './capacity';
 import type { DepartureRow, DepartureStatus, DeparturesGateway, Tour, Vehicle } from './model';
 import { useAsync } from '../useAsync';
+import { VehiclesSection } from './VehiclesSection';
 
 export interface DeparturesPageProps {
   gateway: DeparturesGateway;
@@ -133,6 +134,8 @@ export function DeparturesPage({ gateway, canSchedule, canManage, onOpen, onSche
           </button>
         </div>
       )}
+
+      {canSchedule && <VehiclesSection gateway={gateway} />}
 
       {data && alerts.length > 0 && (
         <section className="operator-panel" aria-labelledby="dep-alerts">
