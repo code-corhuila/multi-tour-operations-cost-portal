@@ -9,7 +9,13 @@ import { VehiclesSection } from './VehiclesSection';
 const van: Vehicle = { id: 'v-1', name: 'Van VAN-204', capacity: 12 };
 
 function gatewayOf(patch: Partial<DeparturesGateway>): DeparturesGateway {
-  return { ...createDeparturesFixture(), connected: true, listVehicles: async () => [van], createVehicle: async (i) => ({ id: 'v-9', name: i.name, capacity: i.capacity }), ...patch };
+  return {
+    ...createDeparturesFixture(),
+    connected: true,
+    listVehicles: async () => [van],
+    createVehicle: async (i) => ({ id: 'v-9', name: i.name, capacity: i.capacity }),
+    ...patch,
+  };
 }
 
 const fill = (name: string, capacity: string) => {
@@ -141,7 +147,9 @@ describe('the vehicles section', () => {
     fill('Bote 02', '10');
     save();
     await screen.findByText(/Bote 02/);
-    const items = within(screen.getByRole('list')).getAllByRole('listitem').map((li) => li.textContent);
+    const items = within(screen.getByRole('list'))
+      .getAllByRole('listitem')
+      .map((li) => li.textContent);
     expect(items[0]).toContain('Bote 02');
     expect(items[1]).toContain('Van VAN-204');
   });
