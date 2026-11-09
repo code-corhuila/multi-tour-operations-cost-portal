@@ -132,6 +132,15 @@ describe('the panel over the service', () => {
     expect(within(p).getByRole('option', { name: /Interrumpida/ })).toBeInTheDocument();
   });
 
+  it('U·the_texts_have_the_limits_of_the_contract', async () => {
+    open(connected(async () => marked()));
+    const p = await panel();
+    choose(p, 'INTERRUPTED');
+    expect(within(p).getByLabelText('Interrupción (causa y evidencia)')).toHaveAttribute('maxLength', '1000');
+    type(p, 'Hora de inicio real', '2026-10-10T07:30');
+    expect(within(p).getByLabelText(/Motivo si la hora real/)).toHaveAttribute('maxLength', '500');
+  });
+
   it('U·the_motive_is_asked_only_when_the_typed_start_is_earlier_than_the_scheduled_one', async () => {
     const register = vi.fn(async () => marked());
     open(connected(register));
