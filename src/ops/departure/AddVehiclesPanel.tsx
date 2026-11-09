@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Refused } from '../departures/model';
+import { Forbidden, Refused } from '../departures/model';
 import { useAsync } from '../useAsync';
 import type { Departure } from './gateway';
 import { failureText, type PanelProps } from './panelProps';
@@ -15,6 +15,7 @@ export function AddVehiclesPanel({ departure, gateway, canSchedule, onChanged }:
   const [chosen, setChosen] = useState<string[]>([]);
   const [error, setError] = useState<string>();
   const [done, setDone] = useState<string>();
+  const MAX = 20;
   const { sending, failed, error: failure, submit } = useRegistration();
 
   if (!applicable || !gateway.addVehicles) return null;
@@ -33,14 +34,21 @@ export function AddVehiclesPanel({ departure, gateway, canSchedule, onChanged }:
     if (ok && updated) {
       setChosen([]);
       setDone(`Vehículos agregados. Capacidad efectiva: ${updated.capacity}.`);
-      onChanged(updated);
+      // the answer of an addition does not read the seats held (it says 0): the ones the page already had are kept
+      onChanged({ ...updated, booked: departure.booked });
     }
   }
 
   const message =
     failure instanceof Refused && failure.code === 'BUSINESS_RULE_VIOLATION'
       ? 'El servicio no aceptó los vehículos: alguno ya está en otra salida a esa hora, no existe o el tour no usa transporte. Tus datos siguen aquí.'
-      : failureText(failure, 'los vehículos');
+      : failure instanceof Forbidden
+        ? 'Solo el Administrador agrega vehículos a una salida. Tus datos siguen aquí.'
+        : failureText(failure, 'los vehículos');
+  const toggle = (id: string, on: boolean) => {
+    setDone(undefined);
+    setChosen(on ? [...chosen, id] : chosen.filter((chosenId) => chosenId !== id));
+  };
   const free = state.kind === 'data' ? state.data.filter((v) => !onIt.includes(v.id)) : [];
 
   return (
@@ -69,21 +77,23 @@ export function AddVehiclesPanel({ departure, gateway, canSchedule, onChanged }:
           }}
           noValidate
         >
-          <fieldset disabled={sending} aria-describedby={error ? 'add-vehicles-error' : undefined}>
+          <fieldset disabled={sending} aria-describedby={error ? 'add-vehicles-error' : undefined} aria-invalid={error ? true : undefined}>
             <legend>Vehículos disponibles</legend>
             {free.map((v) => (
               <label key={v.id} className="operator-check">
                 <input
                   type="checkbox"
                   checked={chosen.includes(v.id)}
-                  onChange={(e) => setChosen(e.target.checked ? [...chosen, v.id] : chosen.filter((id) => id !== v.id))}
+                  disabled={!chosen.includes(v.id) && chosen.length >= MAX}
+                  onChange={(e) => toggle(v.id, e.target.checked)}
                 />
                 {v.name} · {v.capacity} cupos
               </label>
             ))}
           </fieldset>
+          {chosen.length >= MAX && <p className="operator-copy">Máximo {MAX} vehículos por solicitud.</p>}
           {error && (
-            <p id="add-vehicles-error" className="operator-form-feedback is-error">
+            <p id="add-vehicles-error" className="operator-form-feedback is-error" role="alert">
               {error}
             </p>
           )}
