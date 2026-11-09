@@ -181,3 +181,59 @@ describe('departure execution page', () => {
     await expect(gateway.getDeparture('SAL-025')).resolves.toMatchObject({ code: 'SAL-025', status: 'SCHEDULED' });
   });
 });
+
+// Spec 008 PT8-02 (AC-PT-08.2, -08.8): over the gateway that talks to the service the page shows only real data and the panels it offers.
+describe('departure execution page over the service (spec 008)', () => {
+  const real = (extra: object = {}): DepartureExecutionGateway => ({
+    ...createDepartureFixture(),
+    connected: true,
+    panels: ['departure'],
+    getDeparture: async () => ({
+      code: 'SAL-031',
+      status: 'FINISHED',
+      vehicles: ['Van'],
+      capacity: 12,
+      booked: 5,
+      scheduledStart: '2026-12-01T08:00',
+      scheduledEnd: '2026-12-01T16:00',
+      actualStart: '2026-12-01T08:07',
+      actualEnd: '2026-12-01T14:00',
+      mark: 'Interrumpida',
+      interruptionCause: 'Heavy rain closed the trail',
+      reservations: [],
+      novelties: [],
+      history: [],
+      ...extra,
+    }),
+  });
+
+  it('U·no_test_data_label_and_only_the_panels_the_service_offers', async () => {
+    setup('SAL-031', true, real());
+    expect(await screen.findByRole('heading', { name: 'SAL-031' })).toBeInTheDocument();
+    expect(screen.queryByText('Datos de prueba')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Historial de la salida' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Reservas/ })).not.toBeInTheDocument();
+  });
+
+  it('U·the_real_times_the_vehicles_and_the_interruption_are_shown', async () => {
+    setup('SAL-031', true, real());
+    const panel = (await screen.findByRole('heading', { name: 'SAL-031' })).closest('section') as HTMLElement;
+    expect(within(panel).getByText('Van')).toBeInTheDocument();
+    expect(within(panel).getByText('12 cupos · 5 reservados')).toBeInTheDocument();
+    expect(within(panel).getByText('2026-12-01 08:07')).toBeInTheDocument();
+    expect(within(panel).getByText('2026-12-01 14:00')).toBeInTheDocument();
+    expect(within(panel).getByText('Heavy rain closed the trail')).toBeInTheDocument();
+  });
+
+  it('U·without_an_interruption_there_is_no_cause_row_and_a_missing_end_shows_a_dash', async () => {
+    setup('SAL-031', true, real({ status: 'IN_EXECUTION', mark: '', interruptionCause: undefined, actualEnd: undefined }));
+    const panel = (await screen.findByRole('heading', { name: 'SAL-031' })).closest('section') as HTMLElement;
+    expect(within(panel).queryByText('Causa de la interrupción')).not.toBeInTheDocument();
+    expect(within(panel).getByText('Finalización real').closest('li')).toHaveTextContent('—');
+  });
+
+  it('U·a_departure_the_service_does_not_have_says_so', async () => {
+    setup('SAL-404', true, { ...real(), getDeparture: async () => undefined });
+    expect(await screen.findByText('No encontramos esta salida.')).toBeInTheDocument();
+  });
+});

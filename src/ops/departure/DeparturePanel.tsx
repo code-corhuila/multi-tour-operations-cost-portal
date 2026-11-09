@@ -19,6 +19,7 @@ export function DeparturePanel({ departure }: PanelProps) {
     ['Inicio real', showTime(departure.actualStart)],
     ['Finalización real', showTime(departure.actualEnd)],
     ['Marca', departure.mark],
+    ...(departure.interruptionCause ? ([['Causa de la interrupción', departure.interruptionCause]] as [string, string][]) : []),
   ];
   return (
     <section className="operator-panel" aria-labelledby="departure-title">

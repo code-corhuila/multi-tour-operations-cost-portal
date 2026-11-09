@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import type { MountProps } from './contract';
 import { createFixtureGateway } from './ops/fixtureGateway';
 import { DepartureExecutionPage } from './ops/departure/DepartureExecutionPage';
+import { createExecutionGateway } from './ops/departure/execution';
 import { DeparturesPage } from './ops/departures/DeparturesPage';
 import { ScheduleDepartureForm } from './ops/departures/ScheduleDepartureForm';
 import { VehiclesSection } from './ops/departures/VehiclesSection';
@@ -41,7 +42,9 @@ interface DepartureFixture {
 function App({ session, area: areaProp, initialParams, apiClient }: MountProps) {
   const area = areaProp ?? (initialParams?.area === 'departures' || initialParams?.area === 'operation' ? initialParams.area : undefined);
   const gateway = useMemo(createFixtureGateway, []);
-  const [departure, setDeparture] = useState<string>();
+  // The code of the departure open on its page, and where it comes from: a row of the real list reads the service, a row of the
+  // test data of the operation page reads the test data (spec 008 plan D-02).
+  const [departure, setDeparture] = useState<{ code: string; real: boolean }>();
   const [fixture, setFixture] = useState<DepartureFixture>();
   const [view, setView] = useState<'operation' | 'departures'>(area === 'departures' ? 'departures' : 'operation');
   // The form of a departure is a state of the Salidas area: new (editing undefined) or editing a code.
@@ -66,6 +69,7 @@ function App({ session, area: areaProp, initialParams, apiClient }: MountProps) 
   const testDepartures = fixture?.departures ?? noDepartures;
   // The container hands one stable client for the life of the mount; a new object per render would reload the form.
   const scheduling = useMemo(() => createDeparturesGateway(apiClient, testDepartures), [apiClient, testDepartures]);
+  const execution = useMemo(() => createExecutionGateway(apiClient), [apiClient]);
   const canManage = (session.permissions ?? []).includes(MANAGE_DEPARTURE_EXECUTION);
   if (!session.roles.some((role) => OPERATOR_ROLES.includes(role))) {
     return (
@@ -75,8 +79,15 @@ function App({ session, area: areaProp, initialParams, apiClient }: MountProps) 
     );
   }
   // The portal keeps its own view: the container routes to the area, not inside it.
-  if (departure && fixture) {
-    return <DepartureExecutionPage gateway={fixture.gateway} code={departure} canManage={canManage} onBack={() => setDeparture(undefined)} />;
+  if (departure && (departure.real || fixture)) {
+    return (
+      <DepartureExecutionPage
+        gateway={departure.real ? execution : fixture!.gateway}
+        code={departure.code}
+        canManage={canManage}
+        onBack={() => setDeparture(undefined)}
+      />
+    );
   }
   if (view === 'departures') {
     if (!canManage) {
@@ -109,7 +120,7 @@ function App({ session, area: areaProp, initialParams, apiClient }: MountProps) 
         gateway={scheduling}
         canSchedule={canSchedule}
         canManage={canManage}
-        onOpen={setDeparture}
+        onOpen={(code) => setDeparture({ code, real: true })}
         onSchedule={() => {
           setNotice(undefined);
           setForm({});
@@ -124,7 +135,7 @@ function App({ session, area: areaProp, initialParams, apiClient }: MountProps) 
       </DeparturesPage>
     );
   }
-  return <OperationsPage gateway={gateway} onRegister={(reservationId) => fixture && setDeparture(fixture.codeOf(reservationId))} />;
+  return <OperationsPage gateway={gateway} onRegister={(reservationId) => fixture && setDeparture({ code: fixture.codeOf(reservationId), real: false })} />;
 }
 
 // The container calls this with its own client and session; the portal never creates either (Annex H).
