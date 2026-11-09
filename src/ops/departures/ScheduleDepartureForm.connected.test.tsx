@@ -13,6 +13,7 @@ const tour = (id: string, name: string, capacity: number, transport: boolean) =>
   configuredCapacity: capacity,
   transportRequired: transport,
 });
+const noDepartures = { data: [], meta: { page: 1, limit: 100, total: 0, totalPages: 1 } };
 const noVehicles = { data: [], meta: { page: 1, limit: 100, total: 0, totalPages: 1 } };
 const created = {
   code: 'SAL-004',
@@ -27,7 +28,10 @@ const created = {
 };
 
 function setup(handler: (path: string, init?: { method?: string; headers?: Record<string, string> }) => unknown | Promise<unknown>) {
-  const request = vi.fn(async (path: string, init?: { method?: string; headers?: Record<string, string> }) => handler(path, init));
+  // the departures the form judges conflicts against come from the service: here there are none
+  const request = vi.fn(async (path: string, init?: { method?: string; headers?: Record<string, string> }) =>
+    path.startsWith('/api/v1/operations-cost/departures?') ? noDepartures : handler(path, init),
+  );
   const gateway = createDeparturesGateway({ request } as unknown as ApiClient, createDeparturesFixture());
   const onSaved = vi.fn();
   const onBack = vi.fn();
@@ -37,7 +41,8 @@ function setup(handler: (path: string, init?: { method?: string; headers?: Recor
 }
 
 const tours = [tour('t-1', 'Cañón del río', 12, false), tour('t-2', 'Bote por la ciénaga', 10, true)];
-const ok = (path: string) => (path.includes('catalog') ? catalog(tours) : path.includes('/vehicles') ? noVehicles : created);
+const ok = (path: string) =>
+  path.includes('catalog') ? catalog(tours) : path.includes('/vehicles') ? noVehicles : path.startsWith('/api/v1/operations-cost/departures?') ? noDepartures : created;
 const fill = async (tourId = 't-1', end = '14:00') => {
   fireEvent.change(await screen.findByLabelText('Tour'), { target: { value: tourId } });
   fireEvent.change(screen.getByLabelText('Fecha'), { target: { value: '2026-12-01' } });

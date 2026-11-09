@@ -19,6 +19,21 @@ const offsetAt = (instant: number, zone: string): number => {
   return Date.UTC(n('year'), n('month') - 1, n('day'), n('hour'), n('minute'), n('second')) - Math.floor(instant / 1000) * 1000;
 };
 
+/** The wall clock of `zone` (`2026-12-01T08:00`) at an RFC 3339 instant; seconds and below are dropped. */
+export function fromInstant(instant: string, zone: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: zone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).formatToParts(new Date(instant));
+  const part = (type: string) => parts.find((p) => p.type === type)!.value;
+  return `${part('year')}-${part('month')}-${part('day')}T${part('hour')}:${part('minute')}`;
+}
+
 /** Turns a wall clock of `zone` (`2026-12-01T08:00`) into an RFC 3339 instant in UTC (`2026-12-01T13:00:00Z`). */
 export function toInstant(wallClock: string, zone: string): string {
   const m = WALL_CLOCK.exec(wallClock);

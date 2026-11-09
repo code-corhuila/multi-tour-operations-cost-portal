@@ -87,10 +87,10 @@ describe('scheduling', () => {
     }
   });
 
-  it('A·the_other_operations_stay_on_the_test_adapter', async () => {
+  it('A·the_edit_and_the_cancellation_stay_on_the_test_adapter', async () => {
     const { client, calls } = fakeClient(() => created);
     const gateway = createDeparturesGateway(client, createDeparturesFixture());
-    expect((await gateway.listDepartures()).length).toBeGreaterThan(0);
+    await expect(gateway.cancelDeparture({ code: 'SAL-018', cause: 'x', key: 'k' })).resolves.toBeDefined();
     expect(calls).toHaveLength(0);
   });
 });

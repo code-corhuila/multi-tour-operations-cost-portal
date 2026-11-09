@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { mount } from './mount';
 import type { ApiClient, MountProps } from './contract';
@@ -160,7 +160,7 @@ describe('operations portal mount (RN-OPS-PT-01)', () => {
     const element = document.createElement('div');
     document.body.appendChild(element);
     const unmount = mount(element, { ...props(['TENANT_ADMINISTRATOR'], apiClient, []), area: 'departures' });
-    expect(await screen.findByRole('alert')).toHaveTextContent('No tienes acceso a las salidas');
+    expect(await within(element).findByRole('alert')).toHaveTextContent('No tienes acceso a las salidas');
     expect(screen.queryByRole('heading', { name: 'Salidas' })).not.toBeInTheDocument();
     expect(apiClient.request).not.toHaveBeenCalledWith(expect.stringContaining('/departures'));
     unmount();

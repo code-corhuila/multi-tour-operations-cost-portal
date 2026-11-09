@@ -4,6 +4,8 @@ import type { ApiClient } from '../../contract';
 import { createDeparturesFixture } from './fixture';
 import { ScheduleDepartureForm } from './ScheduleDepartureForm';
 import { createDeparturesGateway } from './scheduling';
+import type { DepartureRow } from './model';
+import { TENANT_TIME_ZONE, toInstant } from './time';
 
 // Portal spec 007, task PT7-02 (AC-PT-07.3 to -07.5, -07.7): the connected form assigns real vehicles to a tour that requires transport.
 const page = (items: object[]) => ({ data: items, meta: { page: 1, limit: 100, total: items.length, totalPages: 1 } });
@@ -32,12 +34,24 @@ const created = {
   reservations: [],
   novelties: [],
 };
+const asService = (row: DepartureRow) => ({
+  code: row.code,
+  serviceId: row.tourId,
+  status: row.status,
+  scheduledStart: toInstant(row.start, TENANT_TIME_ZONE),
+  scheduledEnd: toInstant(row.end, TENANT_TIME_ZONE),
+  capacity: 0,
+  booked: row.booked,
+  vehicles: row.vehicleIds.map((vehicleId) => ({ vehicleId })),
+});
 type Init = { method?: string; headers?: Record<string, string>; body?: Record<string, unknown> };
 
 function setup(onSchedule: () => unknown = () => created, rest = createDeparturesFixture()) {
   const request = vi.fn(async (path: string, _init?: Init) => {
     if (path.includes('catalog')) return page(tours);
     if (path.includes('/vehicles')) return page(vehicles);
+    // the departures the form judges conflicts against come from the service; the test data stand in for them
+    if (path.startsWith('/api/v1/operations-cost/departures?')) return page((await rest.listDepartures()).map(asService));
     return onSchedule();
   });
   const gateway = createDeparturesGateway({ request } as unknown as ApiClient, rest);
