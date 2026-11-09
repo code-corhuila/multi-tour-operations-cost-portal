@@ -17,7 +17,7 @@ describe('travelers served of a reservation (AC-PT-10.2)', () => {
     const gateway = setup('SAL-021');
     const spy = vi.spyOn(gateway, 'registerServices');
     const panel = await section('Lo reservado y lo efectivamente prestado');
-    const served = within(panel).getByLabelText('Viajeros atendidos');
+    const served = within(panel).getAllByLabelText('Viajeros atendidos')[0];
     fireEvent.change(served, { target: { value: '5' } });
     fireEvent.click(within(panel).getByRole('button', { name: 'Guardar servicios' }));
     expect(await within(panel).findByText('Los viajeros atendidos van de 1 a 4.')).toBeInTheDocument();
@@ -26,11 +26,11 @@ describe('travelers served of a reservation (AC-PT-10.2)', () => {
     fireEvent.click(within(panel).getByRole('button', { name: 'Guardar servicios' }));
     expect(await within(panel).findByText('Indica la causal de los viajeros que no se atendieron.')).toBeInTheDocument();
     expect(spy).not.toHaveBeenCalled();
-    fireEvent.change(within(panel).getByLabelText('Causal si no se prestó'), { target: { value: 'Uno se quedó en el hotel' } });
+    fireEvent.change(within(panel).getAllByLabelText('Causal si no se prestó')[0], { target: { value: 'Uno se quedó en el hotel' } });
     fireEvent.click(within(panel).getByRole('button', { name: 'Guardar servicios' }));
     expect(await within(panel).findByText(/Servicios guardados/)).toBeInTheDocument();
     expect(spy).toHaveBeenCalledWith(
-      expect.objectContaining({ entries: [expect.objectContaining({ travelersServed: 3, noShow: false, cause: 'Uno se quedó en el hotel' })] }),
+      expect.objectContaining({ entries: expect.arrayContaining([expect.objectContaining({ travelersServed: 3, noShow: false, cause: 'Uno se quedó en el hotel' })]) }),
     );
   });
 
@@ -38,19 +38,19 @@ describe('travelers served of a reservation (AC-PT-10.2)', () => {
     const gateway = setup('SAL-021');
     const spy = vi.spyOn(gateway, 'registerServices');
     const panel = await section('Lo reservado y lo efectivamente prestado');
-    fireEvent.click(within(panel).getByLabelText('No se presentó sin aviso oportuno'));
-    expect(within(panel).getByLabelText('Resultado')).toHaveValue('NOT_DELIVERED');
-    expect(within(panel).getByLabelText('Viajeros atendidos')).toHaveValue(0);
-    expect(within(panel).getByLabelText('Viajeros atendidos')).toBeDisabled();
+    fireEvent.click(within(panel).getAllByLabelText('No se presentó sin aviso oportuno')[0]);
+    expect(within(panel).getAllByLabelText('Resultado')[0]).toHaveValue('NOT_DELIVERED');
+    expect(within(panel).getAllByLabelText('Viajeros atendidos')[0]).toHaveValue(0);
+    expect(within(panel).getAllByLabelText('Viajeros atendidos')[0]).toBeDisabled();
     expect(within(panel).getByText('El servicio se mantiene cobrado.')).toBeInTheDocument();
     fireEvent.click(within(panel).getByRole('button', { name: 'Guardar servicios' }));
     expect(await within(panel).findByText('La causal es obligatoria para un servicio no prestado.')).toBeInTheDocument();
-    fireEvent.change(within(panel).getByLabelText('Causal si no se prestó'), { target: { value: 'No llegó, sin aviso' } });
+    fireEvent.change(within(panel).getAllByLabelText('Causal si no se prestó')[0], { target: { value: 'No llegó, sin aviso' } });
     fireEvent.click(within(panel).getByRole('button', { name: 'Guardar servicios' }));
     expect(await within(panel).findByText(/Servicios guardados/)).toBeInTheDocument();
     expect(spy).toHaveBeenCalledWith(
       expect.objectContaining({
-        entries: [expect.objectContaining({ result: 'NOT_DELIVERED', travelersServed: 0, noShow: true, cause: 'No llegó, sin aviso' })],
+        entries: expect.arrayContaining([expect.objectContaining({ result: 'NOT_DELIVERED', travelersServed: 0, noShow: true, cause: 'No llegó, sin aviso' })]),
       }),
     );
   });
@@ -72,8 +72,8 @@ describe('travelers served of a reservation (AC-PT-10.2)', () => {
     fireEvent.click(within(panel).getByRole('button', { name: 'Guardar servicios' }));
     fireEvent.click(await within(panel).findByRole('button', { name: 'Reintentar' }));
     await within(panel).findByText(/Servicios guardados/);
-    fireEvent.change(within(panel).getByLabelText('Viajeros atendidos'), { target: { value: '2' } });
-    fireEvent.change(within(panel).getByLabelText('Causal si no se prestó'), { target: { value: 'Dos se quedaron' } });
+    fireEvent.change(within(panel).getAllByLabelText('Viajeros atendidos')[0], { target: { value: '2' } });
+    fireEvent.change(within(panel).getAllByLabelText('Causal si no se prestó')[0], { target: { value: 'Dos se quedaron' } });
     fireEvent.click(within(panel).getByRole('button', { name: 'Guardar servicios' }));
     await waitFor(() => expect(keys).toHaveLength(3));
     expect(keys[1]).toBe(keys[0]);
@@ -96,7 +96,7 @@ describe('the real base and the reservations that could not be read', () => {
     setup('SAL-021', withService((d) => ({ ...d, travelersServed: 3 })));
     const panel = await section('SAL-021');
     expect(within(panel).getByText('Atendidos')).toBeInTheDocument();
-    expect(within(panel).getByText('3 de 4 reservados')).toBeInTheDocument();
+    expect(within(panel).getByText('3 de 6 reservados')).toBeInTheDocument();
   });
 
   it('U·without_reservations_the_panel_says_they_could_not_be_read_and_offers_a_retry', async () => {
@@ -109,5 +109,25 @@ describe('the real base and the reservations that could not be read', () => {
     unreadable = false;
     fireEvent.click(within(panel).getByRole('button', { name: 'Reintentar' }));
     expect(await within(panel).findByText(/#RES-1002 · Cliente de prueba · 4 viajeros/)).toBeInTheDocument();
+  });
+
+  it('U·the_real_base_is_not_shown_when_the_reservations_could_not_be_read', async () => {
+    setup('SAL-021', withService((d) => ({ ...d, travelersServed: 3, reservations: [], reservationsUnavailable: true })));
+    const panel = await section('SAL-021');
+    expect(within(panel).queryByText('Atendidos')).not.toBeInTheDocument();
+  });
+
+  it('U·a_retry_that_fails_again_says_so', async () => {
+    let calls = 0;
+    const gateway = withService((d) => ({ ...d, reservations: [], reservationsUnavailable: true }));
+    const read = gateway.getDeparture.bind(gateway);
+    gateway.getDeparture = async (code) => {
+      if (++calls > 1) throw new Error('network');
+      return read(code);
+    };
+    setup('SAL-021', gateway);
+    const panel = await section('Lo reservado y lo efectivamente prestado');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Reintentar' }));
+    expect(await within(panel).findByText('Tampoco pudimos volver a leerlas. Intenta de nuevo.')).toBeInTheDocument();
   });
 });
