@@ -1,10 +1,10 @@
 import type { DepartureStatus } from './gateway';
 
-export type PanelId = 'departure' | 'start' | 'regularize' | 'reservations' | 'novelties' | 'finish' | 'history';
+export type PanelId = 'departure' | 'vehicles' | 'start' | 'regularize' | 'reservations' | 'novelties' | 'finish' | 'history';
 
 // The only place that knows which panels a status shows (spec 004 section 3.2, RN-OPS-PT-31).
 const BY_STATUS: Record<DepartureStatus, PanelId[]> = {
-  SCHEDULED: ['departure', 'start', 'reservations', 'history'],
+  SCHEDULED: ['departure', 'vehicles', 'start', 'reservations', 'history'],
   IN_EXECUTION: ['departure', 'reservations', 'novelties', 'finish', 'history'],
   PENDING_REGULARIZATION: ['departure', 'regularize', 'reservations', 'history'],
   FINISHED: ['departure', 'reservations', 'novelties', 'history'],

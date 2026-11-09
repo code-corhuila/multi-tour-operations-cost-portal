@@ -1,10 +1,10 @@
 import type { ApiClient } from '../../contract';
-import { translate } from '../departures/scheduling';
+import { readVehicles, translate } from '../departures/scheduling';
 import { TENANT_TIME_ZONE, fromInstant, toInstant } from '../departures/time';
 import type { Departure, DepartureExecutionGateway, DepartureStatus } from './gateway';
 
 // The adapter of the page of a departure to the operations-cost service (spec 008 plan D-02). Only what the service offers is
-// served: reading a departure, recording its start and recording its end or interruption. What it does not offer yet is refused
+// served: reading a departure, adding vehicles to it, recording its start and recording its end or interruption. What it does not offer yet is refused
 // here and never sent; its panels are not drawn (D-03).
 interface DepartureAnswer {
   code: string;
@@ -17,7 +17,8 @@ interface DepartureAnswer {
   actualEnd?: string;
   interrupted: boolean;
   interruptionCause?: string;
-  vehicles: { name: string }[];
+  transportRequired?: boolean;
+  vehicles: { vehicleId: string; name: string }[];
 }
 
 const wall = (instant?: string) => (instant ? fromInstant(instant, TENANT_TIME_ZONE) : undefined);
@@ -29,6 +30,8 @@ function asDeparture(d: DepartureAnswer): Departure {
     code: d.code,
     status: d.status,
     vehicles: d.vehicles.map((v) => v.name),
+    vehicleIds: d.vehicles.map((v) => v.vehicleId),
+    transportRequired: d.transportRequired ?? false,
     capacity: d.capacity,
     booked: d.booked,
     scheduledStart: fromInstant(d.scheduledStart, TENANT_TIME_ZONE),
@@ -46,7 +49,11 @@ function asDeparture(d: DepartureAnswer): Departure {
 export function createExecutionGateway(apiClient: ApiClient): DepartureExecutionGateway {
   return {
     connected: true,
-    panels: ['departure', 'start', 'finish'],
+    panels: ['departure', 'vehicles', 'start', 'finish'],
+    listVehicles: () => readVehicles(apiClient),
+    async addVehicles({ code, vehicleIds, key }) {
+      return record(`${DEPARTURES}/${encodeURIComponent(code)}/vehicles`, key, () => ({ vehicleIds }));
+    },
     async getDeparture(code) {
       try {
         return asDeparture(await apiClient.request<DepartureAnswer>(`${DEPARTURES}/${encodeURIComponent(code)}`));

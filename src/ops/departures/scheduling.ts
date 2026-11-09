@@ -64,25 +64,28 @@ const VEHICLES = '/api/v1/operations-cost/vehicles';
 const MAX_PAGES = 5;
 const CATALOG = '/api/v1/commercial-reservation/catalog/services?serviceType=TOUR&catalogStatus=ACTIVE&limit=100';
 
+/** The vehicles of the tenant, page by page (the same cut as the other lists). */
+export async function readVehicles(apiClient: ApiClient): Promise<Vehicle[]> {
+  const vehicles: Vehicle[] = [];
+  try {
+    for (let page = 1; page <= MAX_PAGES; page++) {
+      const answer = await apiClient.request<VehiclePage>(`${VEHICLES}?limit=100&page=${page}`);
+      vehicles.push(...answer.data.map(asVehicle));
+      if (page >= answer.meta.totalPages) break;
+    }
+  } catch (error) {
+    throw translate(error);
+  }
+  return vehicles;
+}
+
 /** `rest` must be a plain object of arrow functions (it is spread). Scheduling and the tours go to the service through the client of the container; the rest stays on `rest` (D-01). */
 export function createDeparturesGateway(apiClient: ApiClient, rest: DeparturesGateway): DeparturesGateway {
   return {
     ...rest,
     connected: true,
     supportsVehicles: true,
-    async listVehicles() {
-      const vehicles: Vehicle[] = [];
-      try {
-        for (let page = 1; page <= MAX_PAGES; page++) {
-          const answer = await apiClient.request<VehiclePage>(`${VEHICLES}?limit=100&page=${page}`);
-          vehicles.push(...answer.data.map(asVehicle));
-          if (page >= answer.meta.totalPages) break;
-        }
-      } catch (error) {
-        throw translate(error);
-      }
-      return vehicles;
-    },
+    listVehicles: () => readVehicles(apiClient),
     async createVehicle({ name, capacity, key }: VehicleInput): Promise<Vehicle> {
       try {
         const answer = await apiClient.request<{ vehicleId: string; name: string; capacity: number }>(VEHICLES, {

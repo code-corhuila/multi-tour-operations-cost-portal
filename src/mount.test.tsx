@@ -197,7 +197,7 @@ describe('operations portal mount (RN-OPS-PT-01)', () => {
               : path.includes('catalog')
                 ? catalog
                 : { ...created, serviceId: 'svc-1', transportRequired: true, pendingRegularization: false, interrupted: false, vehicles: [] },
-        ) as unknown as ApiClient['request'],
+        ) as unknown as ApiClient['request'] & ReturnType<typeof vi.fn>,
       };
       const element = document.createElement('div');
       document.body.appendChild(element);
