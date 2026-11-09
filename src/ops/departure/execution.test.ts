@@ -110,6 +110,14 @@ describe('the connected execution gateway', () => {
     await expect(failing({ status: 400 }).registerStart(start)).rejects.toBeInstanceOf(FieldError);
   });
 
+  it('C·a_wall_clock_that_cannot_be_converted_is_refused_before_anything_is_sent', async () => {
+    const { client, calls } = fakeClient(() => departure());
+    const gateway = createExecutionGateway(client);
+    await expect(gateway.registerStart({ code: 'SAL-031', startedAt: '12026-12-01T08:10', key: 'start-key-0001' })).rejects.toBeInstanceOf(Failed);
+    await expect(gateway.registerFinish({ code: 'SAL-031', finishedAt: 'x', result: 'FINISHED', cause: '', key: 'finish-key-001' })).rejects.toBeInstanceOf(Failed);
+    expect(calls).toHaveLength(0);
+  });
+
   it('C·a_departure_that_is_not_there_resolves_undefined', async () => {
     expect(await failing({ status: 404, code: 'NOT_FOUND' }).getDeparture('SAL-404')).toBeUndefined();
   });

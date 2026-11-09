@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDepartureFixture } from './fixture';
 import { DepartureExecutionPage } from './DepartureExecutionPage';
 import type { ApiClient } from '../../contract';
@@ -242,6 +242,9 @@ describe('departure execution page over the service (spec 008)', () => {
 
 // Spec 008 PT8-03 (AC-PT-08.3, -08.4, -08.6): start and end over the adapter of the service, with a fake client that plays the service.
 describe('start and end over the service (spec 008)', () => {
+  beforeEach(() => vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-12-02T12:00:00') }));
+  afterEach(() => vi.useRealTimers());
+
   const answer = (status: string, extra: object = {}) => ({
     code: 'SAL-031',
     serviceId: 'tour-1',
@@ -326,5 +329,52 @@ describe('start and end over the service (spec 008)', () => {
     await screen.findByText('Causa de la interrupción');
     expect(await screen.findByText('Heavy rain closed the trail')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Registrar la finalización o la interrupción' })).not.toBeInTheDocument();
+  });
+
+  it('U·a_start_in_the_future_is_refused_beside_the_field_and_nothing_is_sent', async () => {
+    const request = service('SCHEDULED', () => answer('IN_EXECUTION'));
+    await screen.findByRole('heading', { name: 'SAL-031' });
+    typeStart('2026-12-03T08:10');
+    clickStart();
+    expect(await screen.findByText('El inicio real no puede ser posterior a este momento.')).toBeInTheDocument();
+    expect(request.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+  });
+
+  it('U·the_end_is_refused_before_the_real_start_and_in_the_future_and_nothing_is_sent', async () => {
+    const request = service('IN_EXECUTION', () => answer('FINISHED'));
+    await screen.findByRole('heading', { name: 'SAL-031' });
+    fireEvent.change(await screen.findByLabelText('Hora de finalización real'), { target: { value: '2026-12-01T07:59' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar finalización' }));
+    expect(await screen.findByText('La finalización real no puede ser anterior al inicio real ni a la hora programada.')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Hora de finalización real'), { target: { value: '2026-12-03T10:00' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar finalización' }));
+    expect(await screen.findByText('La finalización real no puede ser posterior a este momento.')).toBeInTheDocument();
+    expect(request.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+  });
+
+  it('U·each_refusal_of_the_service_is_told_by_its_code', async () => {
+    service('SCHEDULED', () => Promise.reject({ status: 422, code: 'INVALID_STATUS_TRANSITION' }));
+    await screen.findByRole('heading', { name: 'SAL-031' });
+    typeStart('2026-12-01T08:10');
+    clickStart();
+    expect(await screen.findByText(/ya no está en el estado que esperaba este registro/)).toBeInTheDocument();
+  });
+
+  it('U·the_cause_is_limited_to_1000_characters_and_a_cause_typed_for_an_interruption_does_not_change_the_key_of_a_normal_end', async () => {
+    let calls = 0;
+    const request = service('IN_EXECUTION', () => (++calls === 1 ? Promise.reject({ status: 503, code: 'SERVICE_UNAVAILABLE' }) : answer('FINISHED', { actualEnd: '2026-12-01T19:00:00Z' })));
+    await screen.findByRole('heading', { name: 'SAL-031' });
+    fireEvent.change(await screen.findByLabelText('Hora de finalización real'), { target: { value: '2026-12-01T14:00' } });
+    fireEvent.change(screen.getByLabelText('Resultado'), { target: { value: 'INTERRUPTED' } });
+    const cause = screen.getByLabelText('Interrupción (causa y evidencia)');
+    expect(cause).toHaveAttribute('maxlength', '1000');
+    fireEvent.change(cause, { target: { value: 'typed and then dropped' } });
+    fireEvent.change(screen.getByLabelText('Resultado'), { target: { value: 'FINISHED' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar finalización' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Reintentar' }));
+    await waitFor(() => expect(request.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(2));
+    const posts = request.mock.calls.filter(([, init]) => init?.method === 'POST').map(([, init]) => init as { headers: Record<string, string>; body: Record<string, unknown> });
+    expect(posts[0].body).not.toHaveProperty('cause');
+    expect(posts[1].headers['Idempotency-Key']).toBe(posts[0].headers['Idempotency-Key']);
   });
 });
