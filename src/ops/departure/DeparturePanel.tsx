@@ -17,7 +17,8 @@ export function DeparturePanel({ departure }: PanelProps) {
     ['Capacidad y cupos', `${departure.capacity} cupos · ${departure.booked} reservados`],
     ['Inicio real', showTime(departure.actualStart)],
     ['Finalización real', showTime(departure.actualEnd)],
-    ['Marca', departure.mark],
+    // the badge already says that the departure is pending regularization: it is not said twice
+    ...(departure.pendingRegularization ? [] : ([['Marca', departure.mark]] as [string, string][])),
     ...(departure.interruptionCause ? ([['Causa de la interrupción', departure.interruptionCause]] as [string, string][]) : []),
   ];
   return (

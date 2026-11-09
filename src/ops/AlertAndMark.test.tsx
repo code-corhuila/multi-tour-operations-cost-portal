@@ -94,7 +94,13 @@ describe('the page of a departure shows the alert and the mark', () => {
     open(pageWith({ pendingRegularization: true, mark: 'Pendiente de regularización' }));
     const panel = (await screen.findByRole('heading', { name: 'SAL-018' })).closest('section') as HTMLElement;
     expect(within(panel).getByText('Programada')).toBeInTheDocument();
-    expect(within(panel).getAllByText('Pendiente de regularización').length).toBeGreaterThan(0);
+    expect(within(panel).getByText('Pendiente de regularización')).toBeInTheDocument();
+  });
+
+  it('U·the_mark_is_said_once_on_the_page', async () => {
+    open(pageWith({ pendingRegularization: true, mark: 'Pendiente de regularización' }));
+    const panel = (await screen.findByRole('heading', { name: 'SAL-018' })).closest('section') as HTMLElement;
+    expect(within(panel).getAllByText('Pendiente de regularización')).toHaveLength(1);
   });
 
   it('U·a_marked_departure_in_execution_offers_the_end_and_not_the_regularization', async () => {
