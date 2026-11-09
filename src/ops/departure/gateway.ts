@@ -3,7 +3,7 @@
 import type { Vehicle } from '../departures/model';
 import type { PanelId } from './panels';
 
-export type DepartureStatus = 'SCHEDULED' | 'IN_EXECUTION' | 'PENDING_REGULARIZATION' | 'FINISHED' | 'CANCELLED';
+export type DepartureStatus = 'SCHEDULED' | 'IN_EXECUTION' | 'FINISHED' | 'CANCELLED';
 
 export interface HistoryEntry {
   at: string;
@@ -47,6 +47,10 @@ export interface Departure {
   actualStart?: string;
   actualEnd?: string;
   mark: string;
+  // Since contract 0.6.0 the service says both: the mark of a departure past its estimated end with no closing (it is not a state),
+  // and the alert of a scheduled departure whose start passed. The test data may leave them out.
+  pendingRegularization?: boolean;
+  startAlert?: boolean;
   // Present only for a departure that ended as an interruption (PDR K1).
   interruptionCause?: string;
   // What the service says of the tour and of the vehicles that are on the departure; the test data leave them out.
