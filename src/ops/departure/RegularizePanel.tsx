@@ -105,7 +105,7 @@ export function RegularizePanel({ departure, gateway, canManage, onChanged }: Pa
             {early && (
               <div className="operator-form-wide">
                 <label htmlFor="reg-motive">Motivo si la hora real de inicio es anterior a la programada</label>
-                <input {...field('motive', 'motive')} value={motive} onChange={(e) => setMotive(e.target.value)} />
+                <input {...field('motive', 'motive')} maxLength={500} value={motive} onChange={(e) => setMotive(e.target.value)} />
                 {error('motive', 'motive')}
               </div>
             )}
@@ -114,7 +114,7 @@ export function RegularizePanel({ departure, gateway, canManage, onChanged }: Pa
         {result === 'INTERRUPTED' && (
           <div className="operator-form-wide">
             <label htmlFor="reg-interruption">Interrupción (causa y evidencia)</label>
-            <textarea {...field('interruption', 'interruption')} value={interruption} onChange={(e) => setInterruption(e.target.value)} />
+            <textarea {...field('interruption', 'interruption')} maxLength={1000} value={interruption} onChange={(e) => setInterruption(e.target.value)} />
             {error('interruption', 'interruption')}
           </div>
         )}
