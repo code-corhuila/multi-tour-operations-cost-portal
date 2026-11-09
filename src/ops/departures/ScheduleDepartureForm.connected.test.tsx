@@ -78,13 +78,14 @@ describe('the connected form (spec 006)', () => {
     expect(request.mock.calls[0][0]).toContain('serviceType=TOUR&catalogStatus=ACTIVE');
   });
 
-  it('C·scheduling_shows_the_real_code_and_says_the_list_is_test_data', async () => {
+  it('C·scheduling_shows_the_real_code_and_no_longer_says_the_list_is_test_data', async () => {
     const { onSaved, posts } = setup(ok);
     await fill();
     save();
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
     expect(onSaved.mock.calls[0][0]).toContain('Salida SAL-004 programada (Cañón del río, 2026-12-01 08:00). Capacidad efectiva: 12.');
-    expect(onSaved.mock.calls[0][0]).toContain('La lista muestra datos de prueba');
+    // the list is the service's now, so the line no longer says it is test data
+    expect(onSaved.mock.calls[0][0]).not.toMatch(/datos de prueba/i);
     expect(onSaved.mock.calls[0][0]).not.toMatch(/HU-[A-Z]+-\d/);
     // Whether it can be reserved depends on commercial-reservation learning of the event: not known here.
     expect(onSaved.mock.calls[0][0]).not.toContain('Ya se puede reservar');

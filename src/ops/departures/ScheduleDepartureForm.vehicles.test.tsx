@@ -122,7 +122,7 @@ describe('the connected form with vehicles (spec 007)', () => {
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
     expect(posts()[0][1]?.body).toMatchObject({ serviceId: 't-2', vehicleIds: ['v-1'] });
     expect(onSaved.mock.calls[0][0]).toContain('Salida SAL-004 programada (Bote por la ciénaga, 2026-12-01 08:00). Capacidad efectiva: 10.');
-    expect(onSaved.mock.calls[0][0]).toContain('La lista muestra datos de prueba');
+    expect(onSaved.mock.calls[0][0]).not.toMatch(/datos de prueba/i);
   });
 
   it('C·vehicles_ticked_for_a_tour_that_was_changed_to_one_without_transport_are_not_sent', async () => {

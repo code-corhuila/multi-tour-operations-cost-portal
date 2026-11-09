@@ -55,6 +55,20 @@ describe('fromInstant', () => {
     expect(fromInstant('2026-12-01T13:00:00.123Z', 'UTC')).toBe('2026-12-01T13:00');
   });
 
+  it('U·midnight_is_00_00_and_never_24_00', () => {
+    expect(fromInstant('2026-12-01T05:00:00Z', 'America/Bogota')).toBe('2026-12-01T00:00');
+    expect(fromInstant('2026-12-01T00:00:00Z', 'UTC')).toBe('2026-12-01T00:00');
+  });
+
+  it('U·it_follows_a_zone_that_changes_its_offset', () => {
+    expect(fromInstant('2026-03-28T23:30:00Z', 'Europe/Madrid')).toBe('2026-03-29T00:30');
+    expect(fromInstant('2026-03-29T01:30:00Z', 'Europe/Madrid')).toBe('2026-03-29T03:30');
+  });
+
+  it('U·an_instant_that_is_not_one_throws', () => {
+    expect(() => fromInstant('not an instant', 'UTC')).toThrow();
+  });
+
   it('U·it_undoes_toInstant', () => {
     for (const wall of ['2026-12-01T08:00', '2027-03-10T00:00', '2026-12-31T23:59']) {
       expect(fromInstant(toInstant(wall, 'America/Bogota'), 'America/Bogota')).toBe(wall);

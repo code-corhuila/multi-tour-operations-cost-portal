@@ -93,6 +93,23 @@ describe('operations portal mount (RN-OPS-PT-01)', () => {
     unmount();
   });
 
+  it('U·an_optional_role_with_the_permission_lists_but_never_schedules_and_without_the_claim_sees_nothing', async () => {
+    const element = document.createElement('div');
+    document.body.appendChild(element);
+    const unmount = mount(element, { ...props(['MANAGER']), area: 'departures' });
+    expect(await within(element).findByRole('heading', { name: 'Salidas' })).toBeInTheDocument();
+    expect(within(element).queryByRole('button', { name: 'Programar salida' })).not.toBeInTheDocument();
+    unmount();
+    const bare = document.createElement('div');
+    document.body.appendChild(bare);
+    // a container that gives no `permissions` at all is a refusal, not a crash
+    const withoutClaim = { ...props(['TENANT_ADMINISTRATOR']), area: 'departures' as const };
+    delete (withoutClaim.session as { permissions?: string[] }).permissions;
+    const unmountBare = mount(bare, withoutClaim);
+    expect(await within(bare).findByRole('alert')).toHaveTextContent('No tienes acceso a las salidas');
+    unmountBare();
+  });
+
   it('U·hidden_without_the_role: a customer sees no operation data', async () => {
     const element = document.createElement('div');
     document.body.appendChild(element);
