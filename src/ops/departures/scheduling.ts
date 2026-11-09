@@ -54,7 +54,7 @@ export function createDeparturesGateway(apiClient: ApiClient, rest: DeparturesGa
   return {
     ...rest,
     connected: true,
-    supportsVehicles: false,
+    supportsVehicles: true,
     async listVehicles() {
       const vehicles: Vehicle[] = [];
       try {
@@ -94,19 +94,25 @@ export function createDeparturesGateway(apiClient: ApiClient, rest: DeparturesGa
       }
       return tours;
     },
-    async scheduleDeparture({ tourId, start, end, key }: ScheduleInput): Promise<DepartureRow> {
+    async scheduleDeparture({ tourId, start, end, vehicleIds, key }: ScheduleInput): Promise<DepartureRow> {
       try {
-        const answer = await apiClient.request<{ code: string; status: DepartureRow['status']; booked: number }>('/api/v1/operations-cost/departures', {
-          method: 'POST',
-          headers: { 'Idempotency-Key': key },
-          body: {
-            serviceId: tourId,
-            scheduledStart: toInstant(start, TENANT_TIME_ZONE),
-            scheduledEnd: toInstant(end, TENANT_TIME_ZONE),
-            timeZone: TENANT_TIME_ZONE,
+        const answer = await apiClient.request<{ code: string; status: DepartureRow['status']; booked: number; vehicles?: { vehicleId: string }[] }>(
+          '/api/v1/operations-cost/departures',
+          {
+            method: 'POST',
+            headers: { 'Idempotency-Key': key },
+            body: {
+              serviceId: tourId,
+              scheduledStart: toInstant(start, TENANT_TIME_ZONE),
+              scheduledEnd: toInstant(end, TENANT_TIME_ZONE),
+              timeZone: TENANT_TIME_ZONE,
+              // only a tour that requires transport takes vehicles; the field is left out when there is none
+              ...(vehicleIds.length > 0 ? { vehicleIds } : {}),
+            },
           },
-        });
-        return { code: answer.code, tourId, start, end, vehicleIds: [], booked: answer.booked, reservations: 0, status: answer.status };
+        );
+        const assigned = (answer.vehicles ?? []).map((v) => v.vehicleId);
+        return { code: answer.code, tourId, start, end, vehicleIds: assigned, booked: answer.booked, reservations: 0, status: answer.status };
       } catch (error) {
         throw translate(error);
       }
