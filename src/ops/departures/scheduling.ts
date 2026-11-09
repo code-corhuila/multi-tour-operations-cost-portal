@@ -12,7 +12,7 @@ import {
   type Vehicle,
   type VehicleInput,
 } from './model';
-import { TENANT_TIME_ZONE, toInstant } from './time';
+import { TENANT_TIME_ZONE, fromInstant, toInstant } from './time';
 
 interface Failure {
   status?: number;
@@ -42,6 +42,21 @@ interface VehiclePage {
   meta: { totalPages: number };
 }
 
+interface DeparturePage {
+  data: {
+    code: string;
+    serviceId: string;
+    status: DepartureRow['status'];
+    scheduledStart: string;
+    scheduledEnd: string;
+    capacity: number;
+    booked: number;
+    vehicles: { vehicleId: string }[];
+  }[];
+  meta: { totalPages: number };
+}
+
+const DEPARTURES = '/api/v1/operations-cost/departures';
 const asVehicle = (v: { vehicleId: string; name: string; capacity: number }): Vehicle => ({ id: v.vehicleId, name: v.name, capacity: v.capacity });
 const VEHICLES = '/api/v1/operations-cost/vehicles';
 
@@ -80,6 +95,31 @@ export function createDeparturesGateway(apiClient: ApiClient, rest: DeparturesGa
         throw translate(error);
       }
     },
+    async listDepartures() {
+      const rows: DepartureRow[] = [];
+      try {
+        for (let page = 1; page <= MAX_PAGES; page++) {
+          const answer = await apiClient.request<DeparturePage>(`${DEPARTURES}?limit=100&page=${page}`);
+          for (const d of answer.data) {
+            rows.push({
+              code: d.code,
+              tourId: d.serviceId,
+              start: fromInstant(d.scheduledStart, TENANT_TIME_ZONE),
+              end: fromInstant(d.scheduledEnd, TENANT_TIME_ZONE),
+              vehicleIds: d.vehicles.map((v) => v.vehicleId),
+              booked: d.booked,
+              reservations: 0,
+              status: d.status,
+              capacity: d.capacity,
+            });
+          }
+          if (page >= answer.meta.totalPages) break;
+        }
+      } catch (error) {
+        throw translate(error);
+      }
+      return rows;
+    },
     async listTours() {
       const tours: Tour[] = [];
       try {
@@ -97,7 +137,7 @@ export function createDeparturesGateway(apiClient: ApiClient, rest: DeparturesGa
     async scheduleDeparture({ tourId, start, end, vehicleIds, key }: ScheduleInput): Promise<DepartureRow> {
       try {
         const answer = await apiClient.request<{ code: string; status: DepartureRow['status']; booked: number; vehicles?: { vehicleId: string }[] }>(
-          '/api/v1/operations-cost/departures',
+          DEPARTURES,
           {
             method: 'POST',
             headers: { 'Idempotency-Key': key },

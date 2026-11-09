@@ -69,6 +69,7 @@ export function DeparturesPage({ gateway, canSchedule, canManage, onOpen, onSche
   const tourOf = (d: DepartureRow) => data?.tours.find((t) => t.id === d.tourId);
   const vehiclesOf = (d: DepartureRow) => (data?.vehicles ?? []).filter((v) => d.vehicleIds.includes(v.id));
   const capacityOf = (d: DepartureRow) => {
+    if (d.capacity !== undefined) return d.capacity;
     const tour = tourOf(d);
     return tour
       ? effectiveCapacity(
@@ -123,7 +124,7 @@ export function DeparturesPage({ gateway, canSchedule, canManage, onOpen, onSche
           Una salida es la ejecución programada de un tour con fecha, hora de inicio y hora de finalización estimada. Su capacidad efectiva y sus cupos
           apartados se leen aquí.
         </p>
-        <p className="operator-eyebrow">Datos de prueba</p>
+        {!gateway.connected && <p className="operator-eyebrow">Datos de prueba</p>}
       </section>
 
       {state.kind === 'loading' && <p role="status">Cargando…</p>}
@@ -258,12 +259,12 @@ export function DeparturesPage({ gateway, canSchedule, canManage, onOpen, onSche
                         <span className={STATUS[d.status].className}>{STATUS[d.status].label}</span>
                       </td>
                       <td>
-                        {d.status === 'SCHEDULED' && canSchedule && onEdit && (
+                        {!gateway.connected && d.status === 'SCHEDULED' && canSchedule && onEdit && (
                           <button type="button" className="operator-outline" onClick={() => onEdit(d.code)}>
                             Editar
                           </button>
                         )}
-                        {d.status === 'SCHEDULED' && canSchedule && (
+                        {!gateway.connected && d.status === 'SCHEDULED' && canSchedule && (
                           <button
                             type="button"
                             className="operator-outline"

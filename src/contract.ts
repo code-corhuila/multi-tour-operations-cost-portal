@@ -6,6 +6,8 @@ export interface ApiClient {
 
 export interface Session {
   roles: string[];
+  // The special permissions of the token, as the container reads them from its claim `permissions` (codes such as `MANAGE_DEPARTURE_EXECUTION`).
+  permissions?: string[];
   open(answer: unknown, identifier?: string): void;
   close(): void;
 }
