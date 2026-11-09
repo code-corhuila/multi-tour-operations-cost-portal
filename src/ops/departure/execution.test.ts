@@ -163,10 +163,10 @@ describe('the connected execution gateway', () => {
     await expect(failing({ status: 500 }).getDeparture('SAL-031')).rejects.toBeInstanceOf(Failed);
   });
 
-  it('U·it_says_it_talks_to_the_service_and_offers_the_departure_the_start_and_the_finish', () => {
+  it('U·it_says_it_talks_to_the_service_and_offers_the_departure_the_start_the_finish_and_the_regularization', () => {
     const gateway = createExecutionGateway(fakeClient(() => departure()).client);
     expect(gateway.connected).toBe(true);
-    expect(gateway.panels).toEqual(['departure', 'vehicles', 'start', 'finish']);
+    expect(gateway.panels).toEqual(['departure', 'vehicles', 'start', 'finish', 'regularize']);
   });
 
   it('U·what_the_service_does_not_offer_yet_is_refused_and_never_sent', async () => {
@@ -174,7 +174,7 @@ describe('the connected execution gateway', () => {
     const gateway = createExecutionGateway(client);
     await expect(gateway.registerNovelty({ code: 'SAL-031', reservationId: 'r', detail: 'd', emergency: false, key: 'k' })).rejects.toThrow('NOT_AVAILABLE');
     await expect(gateway.registerServices({ code: 'SAL-031', entries: [], key: 'k' })).rejects.toThrow('NOT_AVAILABLE');
-    await expect(gateway.registerRegularization({ code: 'SAL-031', result: 'EXECUTED', startedAt: '', finishedAt: '', earlyStartMotive: '', interruption: '', notDoneCause: '', key: 'k' })).rejects.toThrow('NOT_AVAILABLE');
+    await expect(gateway.registerRegularization({ code: 'SAL-031', result: 'NOT_DONE', startedAt: '', finishedAt: '', earlyStartMotive: '', interruption: '', notDoneCause: 'Rain', key: 'k' })).rejects.toThrow('NOT_AVAILABLE');
     expect(calls).toHaveLength(0);
   });
 });
