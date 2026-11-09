@@ -27,7 +27,6 @@ interface Data {
 const STATUS: Record<DepartureStatus, { label: string; className: string }> = {
   SCHEDULED: { label: 'Programada', className: 'operator-status is-pending' },
   IN_EXECUTION: { label: 'En ejecución', className: 'operator-status is-active' },
-  PENDING_REGULARIZATION: { label: 'Pendiente de regularizar', className: 'operator-status is-inactive' },
   FINISHED: { label: 'Finalizada', className: 'operator-status is-confirmed' },
   CANCELLED: { label: 'Cancelada', className: 'operator-status is-inactive' },
 };
@@ -42,8 +41,8 @@ const FILTERS: { value: Show; label: string }[] = [
   { value: 'alert', label: 'Con alerta o pendientes de regularización' },
 ];
 
-// A departure is flagged by its data, never by the clock: nothing is closed by time (RN-OPS-PT-59).
-const isAlert = (d: DepartureRow) => d.status === 'PENDING_REGULARIZATION';
+// A departure is flagged by what the service says, never by the clock of the browser: nothing is closed by time (RN-OPS-PT-59).
+const isAlert = (d: DepartureRow) => Boolean(d.startAlert || d.pendingRegularization);
 const shown = (d: DepartureRow, show: Show) => (show === 'all' ? true : show === 'alert' ? isAlert(d) : d.status === show);
 const when = (value: string) => value.replace('T', ' ');
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -257,6 +256,8 @@ export function DeparturesPage({ gateway, canSchedule, canManage, onOpen, onSche
                       <td>{d.booked}</td>
                       <td>
                         <span className={STATUS[d.status].className}>{STATUS[d.status].label}</span>
+                        {d.startAlert && <span className="operator-status is-failed">Sin inicio registrado</span>}
+                        {d.pendingRegularization && <span className="operator-status is-inactive">Pendiente de regularizar</span>}
                       </td>
                       <td>
                         {!gateway.connected && d.status === 'SCHEDULED' && canSchedule && onEdit && (
@@ -277,9 +278,9 @@ export function DeparturesPage({ gateway, canSchedule, canManage, onOpen, onSche
                             Cancelar salida
                           </button>
                         )}
-                        {canManage && (d.status === 'SCHEDULED' || d.status === 'IN_EXECUTION' || d.status === 'PENDING_REGULARIZATION') && (
+                        {canManage && (d.status === 'SCHEDULED' || d.status === 'IN_EXECUTION') && (
                           <button type="button" className="operator-outline" onClick={() => onOpen(d.code)}>
-                            {d.status === 'SCHEDULED' ? 'Registrar ejecución' : d.status === 'IN_EXECUTION' ? 'Gestionar ejecución' : 'Regularizar'}
+                            {d.pendingRegularization && d.status === 'SCHEDULED' ? 'Regularizar' : d.status === 'SCHEDULED' ? 'Registrar ejecución' : 'Gestionar ejecución'}
                           </button>
                         )}
                         {(d.status === 'FINISHED' || d.status === 'CANCELLED') && (

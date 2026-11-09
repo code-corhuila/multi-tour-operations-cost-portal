@@ -22,7 +22,8 @@ describe('panels of a departure (RN-OPS-PT-31)', () => {
   it('U·panels_follow_the_status_of_the_departure: each status shows only its panels', () => {
     expect(panelsFor('SCHEDULED')).toEqual(['departure', 'vehicles', 'start', 'reservations', 'history']);
     expect(panelsFor('IN_EXECUTION')).toEqual(['departure', 'reservations', 'novelties', 'finish', 'history']);
-    expect(panelsFor('PENDING_REGULARIZATION')).toEqual(['departure', 'regularize', 'reservations', 'history']);
+    expect(panelsFor('SCHEDULED', true)).toEqual(['departure', 'regularize', 'reservations', 'history']);
+    expect(panelsFor('IN_EXECUTION', true)).toEqual(['departure', 'reservations', 'novelties', 'finish', 'history']);
     expect(panelsFor('FINISHED')).toEqual(['departure', 'reservations', 'novelties', 'history']);
     expect(panelsFor('CANCELLED')).toEqual(['departure', 'reservations', 'history']);
   });

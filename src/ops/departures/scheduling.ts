@@ -47,6 +47,8 @@ interface DeparturePage {
     code: string;
     serviceId: string;
     status: DepartureRow['status'];
+    pendingRegularization: boolean;
+    startAlert: boolean;
     scheduledStart: string;
     scheduledEnd: string;
     capacity: number;
@@ -113,6 +115,8 @@ export function createDeparturesGateway(apiClient: ApiClient, rest: DeparturesGa
               booked: d.booked,
               reservations: 0,
               status: d.status,
+              pendingRegularization: d.pendingRegularization,
+              startAlert: d.startAlert,
               capacity: d.capacity,
             });
           }
