@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TENANT_TIME_ZONE, toInstant } from './time';
+import { TENANT_TIME_ZONE, toInstant, fromInstant } from './time';
 
 describe('toInstant', () => {
   it('A·wall_clock_to_utc_in_bogota', () => {
@@ -44,6 +44,20 @@ describe('toInstant', () => {
       '2026-12-01T08:00:00',
     ]) {
       expect(() => toInstant(bad, TENANT_TIME_ZONE), bad).toThrow();
+    }
+  });
+});
+
+describe('fromInstant', () => {
+  it('U·an_instant_is_the_wall_clock_of_the_zone', () => {
+    expect(fromInstant('2026-12-01T13:00:00Z', 'America/Bogota')).toBe('2026-12-01T08:00');
+    expect(fromInstant('2026-12-01T04:59:00Z', 'America/Bogota')).toBe('2026-11-30T23:59');
+    expect(fromInstant('2026-12-01T13:00:00.123Z', 'UTC')).toBe('2026-12-01T13:00');
+  });
+
+  it('U·it_undoes_toInstant', () => {
+    for (const wall of ['2026-12-01T08:00', '2027-03-10T00:00', '2026-12-31T23:59']) {
+      expect(fromInstant(toInstant(wall, 'America/Bogota'), 'America/Bogota')).toBe(wall);
     }
   });
 });
