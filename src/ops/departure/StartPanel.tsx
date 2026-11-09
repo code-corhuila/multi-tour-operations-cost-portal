@@ -14,6 +14,7 @@ export function StartPanel({ departure, gateway, canManage, onChanged }: PanelPr
     event?.preventDefault();
     if (!value) return setError('Ingresa la hora de inicio real.');
     if (new Date(value) < new Date(departure.scheduledStart)) return setError('El inicio real no puede ser anterior a la hora programada.');
+    if (new Date(value) > new Date()) return setError('El inicio real no puede ser posterior a este momento.');
     setError(undefined);
     let updated: Departure | undefined;
     const ok = await submit(`${departure.code}|${value}`, async (key) => {

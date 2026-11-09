@@ -56,24 +56,25 @@ export function createExecutionGateway(apiClient: ApiClient): DepartureExecution
       }
     },
     async registerStart({ code, startedAt, key }) {
-      return record(`${DEPARTURES}/${encodeURIComponent(code)}/executions`, key, { startedAt: toInstant(startedAt, TENANT_TIME_ZONE) });
+      return record(`${DEPARTURES}/${encodeURIComponent(code)}/executions`, key, () => ({ startedAt: toInstant(startedAt, TENANT_TIME_ZONE) }));
     },
     async registerFinish({ code, finishedAt, result, cause, key }) {
-      return record(`${DEPARTURES}/${encodeURIComponent(code)}/finish`, key, {
+      return record(`${DEPARTURES}/${encodeURIComponent(code)}/finish`, key, () => ({
         finishedAt: toInstant(finishedAt, TENANT_TIME_ZONE),
         result,
         // only an interruption carries its cause
         ...(result === 'INTERRUPTED' ? { cause } : {}),
-      });
+      }));
     },
     registerServices: notAvailable,
     registerNovelty: notAvailable,
     registerRegularization: notAvailable,
   };
 
-  async function record(path: string, key: string, body: Record<string, unknown>): Promise<Departure> {
+  // The body is built inside the guard: a wall clock that cannot be converted is a failure that is told, and nothing is sent.
+  async function record(path: string, key: string, body: () => Record<string, unknown>): Promise<Departure> {
     try {
-      return asDeparture(await apiClient.request<DepartureAnswer>(path, { method: 'POST', headers: { 'Idempotency-Key': key }, body }));
+      return asDeparture(await apiClient.request<DepartureAnswer>(path, { method: 'POST', headers: { 'Idempotency-Key': key }, body: body() }));
     } catch (error) {
       throw translate(error);
     }

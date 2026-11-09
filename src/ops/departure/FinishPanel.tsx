@@ -17,11 +17,14 @@ export function FinishPanel({ departure, gateway, canManage, onChanged }: PanelP
     event?.preventDefault();
     const next: typeof errors = {};
     if (!finishedAt) next.at = 'Ingresa la hora de finalización real.';
+    else if (new Date(finishedAt) < new Date(departure.actualStart ?? departure.scheduledStart))
+      next.at = 'La finalización real no puede ser anterior al inicio real ni a la hora programada.';
+    else if (new Date(finishedAt) > new Date()) next.at = 'La finalización real no puede ser posterior a este momento.';
     if (result === 'INTERRUPTED' && !cause.trim()) next.cause = 'Ingresa la causa y la evidencia de la interrupción.';
     setErrors(next);
     if (Object.keys(next).length > 0) return;
     let updated: Departure | undefined;
-    const ok = await submit(`${departure.code}|${finishedAt}|${result}|${cause.trim()}`, async (key) => {
+    const ok = await submit(`${departure.code}|${finishedAt}|${result}|${result === 'INTERRUPTED' ? cause.trim() : ''}`, async (key) => {
       updated = await gateway.registerFinish({ code: departure.code, finishedAt, result, cause: result === 'INTERRUPTED' ? cause.trim() : '', key });
     });
     if (ok && updated) onChanged(updated);
@@ -67,6 +70,7 @@ export function FinishPanel({ departure, gateway, canManage, onChanged }: PanelP
             <textarea
               id="finish-cause"
               value={cause}
+              maxLength={1000}
               disabled={locked}
               aria-invalid={errors.cause ? true : undefined}
               aria-describedby={errors.cause ? 'finish-cause-error' : undefined}

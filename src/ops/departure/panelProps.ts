@@ -11,7 +11,13 @@ export interface PanelProps {
 // What a panel says when a recording failed: a refusal of the service is told as such (the body and the trace id never are), and the
 // person keeps their data in every case.
 export function failureText(error: unknown, what: string): string {
-  if (error instanceof Refused) return `El servicio no aceptó ${what}: la hora no es válida para esta salida o la salida cambió de estado. Tus datos siguen aquí.`;
+  if (error instanceof Refused) {
+    const reason =
+      error.code === 'INVALID_STATUS_TRANSITION'
+        ? 'la salida ya no está en el estado que esperaba este registro; vuelve a abrirla para ver cómo quedó'
+        : 'la hora está fuera de lo permitido (no antes del inicio ni en el futuro)';
+    return `El servicio no aceptó ${what}: ${reason}. Tus datos siguen aquí.`;
+  }
   if (error instanceof Forbidden) return 'Tu usuario no tiene el permiso Gestionar ejecución de salidas. Tus datos siguen aquí.';
   return `No pudimos registrar ${what}. Tus datos siguen aquí.`;
 }
