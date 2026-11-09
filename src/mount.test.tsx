@@ -15,7 +15,7 @@ const listed = {
 };
 const request = () =>
   vi.fn(async (path: string) =>
-    path.includes('catalog') ? catalog : path.includes('/vehicles') ? noVehicles : path.startsWith('/api/v1/operations-cost/departures?') ? listed : created,
+    path.includes('catalog') ? catalog : path.includes('/vehicles') ? noVehicles : path.startsWith('/api/v1/operations-cost/departures?') ? listed : /\/departures\/SAL-\d+$/.test(path) ? { ...created, serviceId: 'svc-1', pendingRegularization: false, interrupted: false, vehicles: [] } : created,
   ) as unknown as ApiClient['request'] & ReturnType<typeof vi.fn>;
 
 const MANAGE = 'MANAGE_DEPARTURE_EXECUTION';
@@ -169,6 +169,20 @@ describe('operations portal mount (RN-OPS-PT-01)', () => {
     expect(screen.queryByText('Datos de prueba')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Editar/ })).not.toBeInTheDocument();
     expect(apiClient.request).toHaveBeenCalledWith('/api/v1/operations-cost/departures?limit=100&page=1');
+    unmount();
+  });
+
+  it('C·opening_a_real_row_reads_that_departure_from_the_service_and_goes_back', async () => {
+    const apiClient = { request: request() };
+    const element = document.createElement('div');
+    document.body.appendChild(element);
+    const unmount = mount(element, { ...props(['TENANT_ADMINISTRATOR'], apiClient), area: 'departures' });
+    fireEvent.click(await within(element).findByRole('button', { name: 'Registrar ejecución' }));
+    expect(await within(element).findByRole('heading', { name: 'Registrar ejecución de salida' })).toBeInTheDocument();
+    await waitFor(() => expect(apiClient.request).toHaveBeenCalledWith('/api/v1/operations-cost/departures/SAL-031'));
+    expect(within(element).queryByText('Datos de prueba')).not.toBeInTheDocument();
+    fireEvent.click(within(element).getByRole('button', { name: 'Volver a salidas' }));
+    expect(await within(element).findByRole('heading', { name: 'Salidas' })).toBeInTheDocument();
     unmount();
   });
 

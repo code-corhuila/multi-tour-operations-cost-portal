@@ -21,7 +21,7 @@ interface Failure {
   details?: { field?: string; message?: string }[];
 }
 
-function translate(error: unknown): Error {
+export function translate(error: unknown): Error {
   const f: Failure = typeof error === 'object' && error !== null ? error : {};
   if (f.traceId) console.warn(`operations-cost portal: request failed (${f.status ?? f.code}), traceId ${f.traceId}`);
   const named = (f.details ?? []).filter((d): d is { field: string; message: string } => !!d.field && !!d.message);
