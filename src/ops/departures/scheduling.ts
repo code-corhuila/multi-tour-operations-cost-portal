@@ -137,7 +137,7 @@ export function createDeparturesGateway(apiClient: ApiClient, rest: DeparturesGa
     async scheduleDeparture({ tourId, start, end, vehicleIds, key }: ScheduleInput): Promise<DepartureRow> {
       try {
         const answer = await apiClient.request<{ code: string; status: DepartureRow['status']; booked: number; vehicles?: { vehicleId: string }[] }>(
-          '/api/v1/operations-cost/departures',
+          DEPARTURES,
           {
             method: 'POST',
             headers: { 'Idempotency-Key': key },
