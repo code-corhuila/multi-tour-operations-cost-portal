@@ -53,7 +53,7 @@ function asDeparture(d: DepartureAnswer): Departure {
 export function createExecutionGateway(apiClient: ApiClient): DepartureExecutionGateway {
   return {
     connected: true,
-    panels: ['departure', 'vehicles', 'start', 'finish'],
+    panels: ['departure', 'vehicles', 'start', 'finish', 'regularize'],
     listVehicles: () => readVehicles(apiClient),
     async addVehicles({ code, vehicleIds, key }) {
       return record(`${DEPARTURES}/${encodeURIComponent(code)}/vehicles`, key, () => ({ vehicleIds }));
@@ -79,7 +79,17 @@ export function createExecutionGateway(apiClient: ApiClient): DepartureExecution
     },
     registerServices: notAvailable,
     registerNovelty: notAvailable,
-    registerRegularization: notAvailable,
+    async registerRegularization({ code, result, startedAt, finishedAt, earlyStartMotive, interruption, key }) {
+      // The service cannot cancel a departure yet (HU-OPS-006): "not done" is never sent. The fields that do not apply are left out.
+      if (result === 'NOT_DONE') return notAvailable();
+      return record(`${DEPARTURES}/${encodeURIComponent(code)}/regularization`, key, () => ({
+        result,
+        actualStart: toInstant(startedAt, TENANT_TIME_ZONE),
+        actualEnd: toInstant(finishedAt, TENANT_TIME_ZONE),
+        ...(result === 'INTERRUPTED' ? { interruption: interruption.trim() } : {}),
+        ...(earlyStartMotive.trim() ? { earlyStartReason: earlyStartMotive.trim() } : {}),
+      }));
+    },
   };
 
   // The body is built inside the guard: a wall clock that cannot be converted is a failure that is told, and nothing is sent.
