@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import type { Departure } from './gateway';
 import type { PanelProps } from './panelProps';
+import { failureText } from './panelProps';
 import { useRegistration } from './useRegistration';
 
 // Panel "Finalización": the end needs its time and result; an interruption needs its cause (RN-OPS-PT-37).
@@ -9,7 +10,7 @@ export function FinishPanel({ departure, gateway, canManage, onChanged }: PanelP
   const [result, setResult] = useState<'FINISHED' | 'INTERRUPTED'>('FINISHED');
   const [cause, setCause] = useState('');
   const [errors, setErrors] = useState<{ at?: string; cause?: string }>({});
-  const { sending, failed, submit } = useRegistration();
+  const { sending, failed, error: failure, submit } = useRegistration();
   const locked = !canManage || sending;
 
   async function send(event?: FormEvent) {
@@ -86,7 +87,7 @@ export function FinishPanel({ departure, gateway, canManage, onChanged }: PanelP
       </form>
       {failed && (
         <div role="alert">
-          <p className="operator-form-feedback is-error">No pudimos registrar la finalización. Tus datos siguen aquí.</p>
+          <p className="operator-form-feedback is-error">{failureText(failure, 'la finalización')}</p>
           <button type="button" className="operator-outline" disabled={locked} onClick={() => void send()}>
             Reintentar
           </button>

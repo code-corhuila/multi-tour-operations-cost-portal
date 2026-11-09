@@ -1,13 +1,14 @@
 import { useState, type FormEvent } from 'react';
 import type { Departure } from './gateway';
 import type { PanelProps } from './panelProps';
+import { failureText } from './panelProps';
 import { useRegistration } from './useRegistration';
 
 // Panel "Inicio de la salida": the real start, required and not before the scheduled one (RN-OPS-PT-32, -33).
 export function StartPanel({ departure, gateway, canManage, onChanged }: PanelProps) {
   const [value, setValue] = useState('');
   const [error, setError] = useState<string>();
-  const { sending, failed, submit } = useRegistration();
+  const { sending, failed, error: failure, submit } = useRegistration();
 
   async function send(event?: FormEvent) {
     event?.preventDefault();
@@ -58,7 +59,7 @@ export function StartPanel({ departure, gateway, canManage, onChanged }: PanelPr
       </form>
       {failed && (
         <div role="alert">
-          <p className="operator-form-feedback is-error">No pudimos registrar el inicio. Tus datos siguen aquí.</p>
+          <p className="operator-form-feedback is-error">{failureText(failure, 'el inicio')}</p>
           <button type="button" className="operator-outline" disabled={locked} onClick={() => void send()}>
             Reintentar
           </button>

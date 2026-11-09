@@ -1,10 +1,11 @@
 import type { ApiClient } from '../../contract';
 import { translate } from '../departures/scheduling';
-import { TENANT_TIME_ZONE, fromInstant } from '../departures/time';
+import { TENANT_TIME_ZONE, fromInstant, toInstant } from '../departures/time';
 import type { Departure, DepartureExecutionGateway, DepartureStatus } from './gateway';
 
 // The adapter of the page of a departure to the operations-cost service (spec 008 plan D-02). Only what the service offers is
-// served: reading a departure. What it does not offer yet is refused here and never sent; its panels are not drawn (D-03).
+// served: reading a departure, recording its start and recording its end or interruption. What it does not offer yet is refused
+// here and never sent; its panels are not drawn (D-03).
 interface DepartureAnswer {
   code: string;
   status: DepartureStatus;
@@ -21,6 +22,7 @@ interface DepartureAnswer {
 
 const wall = (instant?: string) => (instant ? fromInstant(instant, TENANT_TIME_ZONE) : undefined);
 const notAvailable = () => Promise.reject(new Error('NOT_AVAILABLE'));
+const DEPARTURES = '/api/v1/operations-cost/departures';
 
 function asDeparture(d: DepartureAnswer): Departure {
   return {
@@ -44,19 +46,36 @@ function asDeparture(d: DepartureAnswer): Departure {
 export function createExecutionGateway(apiClient: ApiClient): DepartureExecutionGateway {
   return {
     connected: true,
-    panels: ['departure'],
+    panels: ['departure', 'start', 'finish'],
     async getDeparture(code) {
       try {
-        return asDeparture(await apiClient.request<DepartureAnswer>(`/api/v1/operations-cost/departures/${encodeURIComponent(code)}`));
+        return asDeparture(await apiClient.request<DepartureAnswer>(`${DEPARTURES}/${encodeURIComponent(code)}`));
       } catch (error) {
         if (typeof error === 'object' && error !== null && (error as { status?: number }).status === 404) return undefined;
         throw translate(error);
       }
     },
-    registerStart: notAvailable,
+    async registerStart({ code, startedAt, key }) {
+      return record(`${DEPARTURES}/${encodeURIComponent(code)}/executions`, key, { startedAt: toInstant(startedAt, TENANT_TIME_ZONE) });
+    },
+    async registerFinish({ code, finishedAt, result, cause, key }) {
+      return record(`${DEPARTURES}/${encodeURIComponent(code)}/finish`, key, {
+        finishedAt: toInstant(finishedAt, TENANT_TIME_ZONE),
+        result,
+        // only an interruption carries its cause
+        ...(result === 'INTERRUPTED' ? { cause } : {}),
+      });
+    },
     registerServices: notAvailable,
     registerNovelty: notAvailable,
-    registerFinish: notAvailable,
     registerRegularization: notAvailable,
   };
+
+  async function record(path: string, key: string, body: Record<string, unknown>): Promise<Departure> {
+    try {
+      return asDeparture(await apiClient.request<DepartureAnswer>(path, { method: 'POST', headers: { 'Idempotency-Key': key }, body }));
+    } catch (error) {
+      throw translate(error);
+    }
+  }
 }

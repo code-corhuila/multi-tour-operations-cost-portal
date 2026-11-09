@@ -6,23 +6,26 @@ const newKey = () => globalThis.crypto?.randomUUID?.() ?? `key-${Date.now()}-${M
 export function useRegistration() {
   const [sending, setSending] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [error, setError] = useState<unknown>();
   const last = useRef<{ signature: string; key: string } | undefined>(undefined);
 
   async function submit(signature: string, send: (key: string) => Promise<void>): Promise<boolean> {
     if (last.current?.signature !== signature) last.current = { signature, key: newKey() };
     setSending(true);
     setFailed(false);
+    setError(undefined);
     try {
       await send(last.current.key);
       last.current = undefined;
       return true;
-    } catch {
+    } catch (cause) {
       setFailed(true);
+      setError(cause);
       return false;
     } finally {
       setSending(false);
     }
   }
 
-  return { sending, failed, submit };
+  return { sending, failed, error, submit };
 }

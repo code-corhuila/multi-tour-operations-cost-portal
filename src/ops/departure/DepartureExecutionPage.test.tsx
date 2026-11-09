@@ -268,6 +268,7 @@ describe('start and end over the service (spec 008)', () => {
 
   it('U·a_start_goes_to_the_service_and_the_page_shows_the_departure_in_execution_with_the_finish_panel', async () => {
     const request = service('SCHEDULED', () => answer('IN_EXECUTION', { actualStart: '2026-12-01T13:10:00Z' }));
+    await screen.findByRole('heading', { name: 'SAL-031' });
     typeStart('2026-12-01T08:10');
     clickStart();
     expect(await screen.findByRole('heading', { name: 'Registrar la finalización o la interrupción' })).toBeInTheDocument();
@@ -281,6 +282,7 @@ describe('start and end over the service (spec 008)', () => {
 
   it('U·an_early_start_is_refused_beside_the_field_and_nothing_is_sent', async () => {
     const request = service('SCHEDULED', () => answer('IN_EXECUTION'));
+    await screen.findByRole('heading', { name: 'SAL-031' });
     typeStart('2026-12-01T07:00');
     clickStart();
     expect(await screen.findByText('El inicio real no puede ser anterior a la hora programada.')).toBeInTheDocument();
@@ -289,6 +291,7 @@ describe('start and end over the service (spec 008)', () => {
 
   it('U·a_refusal_of_the_service_is_said_and_the_data_stay', async () => {
     service('SCHEDULED', () => Promise.reject({ status: 422, code: 'BUSINESS_RULE_VIOLATION', traceId: 't-1' }));
+    await screen.findByRole('heading', { name: 'SAL-031' });
     typeStart('2026-12-01T08:10');
     clickStart();
     expect(await screen.findByText(/El servicio no aceptó el inicio/)).toBeInTheDocument();
@@ -299,6 +302,7 @@ describe('start and end over the service (spec 008)', () => {
   it('U·a_retry_after_the_network_failed_reuses_the_key', async () => {
     let calls = 0;
     const request = service('SCHEDULED', () => (++calls === 1 ? Promise.reject({ status: 503, code: 'SERVICE_UNAVAILABLE' }) : answer('IN_EXECUTION', { actualStart: '2026-12-01T13:10:00Z' })));
+    await screen.findByRole('heading', { name: 'SAL-031' });
     typeStart('2026-12-01T08:10');
     clickStart();
     fireEvent.click(await screen.findByRole('button', { name: 'Reintentar' }));
@@ -312,12 +316,14 @@ describe('start and end over the service (spec 008)', () => {
     service('IN_EXECUTION', (_path, body) =>
       answer('FINISHED', { actualStart: '2026-12-01T13:10:00Z', actualEnd: '2026-12-01T19:00:00Z', interrupted: body.result === 'INTERRUPTED', interruptionCause: body.cause }),
     );
+    await screen.findByRole('heading', { name: 'SAL-031' });
     fireEvent.change(await screen.findByLabelText('Hora de finalización real'), { target: { value: '2026-12-01T14:00' } });
     fireEvent.change(screen.getByLabelText('Resultado'), { target: { value: 'INTERRUPTED' } });
     fireEvent.click(screen.getByRole('button', { name: 'Registrar finalización' }));
     expect(await screen.findByText('Ingresa la causa y la evidencia de la interrupción.')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Interrupción (causa y evidencia)'), { target: { value: 'Heavy rain closed the trail' } });
     fireEvent.click(screen.getByRole('button', { name: 'Registrar finalización' }));
+    await screen.findByText('Causa de la interrupción');
     expect(await screen.findByText('Heavy rain closed the trail')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Registrar la finalización o la interrupción' })).not.toBeInTheDocument();
   });
