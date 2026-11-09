@@ -51,7 +51,7 @@ export function DepartureExecutionPage({ gateway, code, canManage, canSchedule, 
   } else if (!state.data) body = <p className="operator-copy">No encontramos esta salida.</p>;
   else {
     const departure = state.data;
-    body = panelsFor(departure.status)
+    body = panelsFor(departure.status, departure.pendingRegularization)
       .filter((id) => !gateway.panels || gateway.panels.includes(id))
       .map((id) => {
         const Panel = DRAWN[id];

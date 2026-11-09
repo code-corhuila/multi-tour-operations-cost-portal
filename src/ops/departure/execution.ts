@@ -17,6 +17,8 @@ interface DepartureAnswer {
   actualEnd?: string;
   interrupted: boolean;
   interruptionCause?: string;
+  pendingRegularization: boolean;
+  startAlert: boolean;
   transportRequired?: boolean;
   vehicles: { vehicleId: string; name: string }[];
 }
@@ -38,7 +40,9 @@ function asDeparture(d: DepartureAnswer): Departure {
     scheduledEnd: fromInstant(d.scheduledEnd, TENANT_TIME_ZONE),
     actualStart: wall(d.actualStart),
     actualEnd: wall(d.actualEnd),
-    mark: d.interrupted ? 'Interrumpida' : '',
+    mark: d.pendingRegularization ? 'Pendiente de regularización' : d.interrupted ? 'Interrumpida' : '',
+    pendingRegularization: d.pendingRegularization,
+    startAlert: d.startAlert,
     ...(d.interruptionCause ? { interruptionCause: d.interruptionCause } : {}),
     reservations: [],
     novelties: [],
