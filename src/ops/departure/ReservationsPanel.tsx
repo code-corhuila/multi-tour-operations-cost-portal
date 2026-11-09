@@ -38,7 +38,11 @@ export function ReservationsPanel({ departure, gateway, canManage, onChanged }: 
     if (Object.keys(next).length > 0) return;
     const entries = departure.reservations
       .filter((r) => r.state === 'IN_EXECUTION')
-      .map((r) => ({ reservationId: r.reservationId, result: draft[r.reservationId].result, cause: draft[r.reservationId].cause.trim() }));
+      .map((r) => {
+        const result = draft[r.reservationId].result;
+        // the travelers served come with the panel of task PT10-02; until then it is all or none of the reserved ones
+        return { reservationId: r.reservationId, result, travelersServed: r.travelersServed ?? (result === 'DELIVERED' ? r.travelers : 0), noShow: r.noShow ?? false, cause: draft[r.reservationId].cause.trim() };
+      });
     let updated: Departure | undefined;
     const ok = await submit(`${departure.code}|${JSON.stringify(entries)}`, async (key) => {
       updated = await gateway.registerServices({ code: departure.code, entries, key });
