@@ -1,5 +1,5 @@
-// Port of the departure execution page to the operations-cost service (spec 004 plan D-02). Only the test-data
-// adapter exists: the contract of the service is not written yet (spec G-1).
+// Port of the departure execution page (spec 004 plan D-02). Two adapters: the test data (`fixture.ts`) and the one that talks to the
+// operations-cost service (`execution.ts`, spec 008), which serves only the panels the service can back.
 import type { PanelId } from './panels';
 
 export type DepartureStatus = 'SCHEDULED' | 'IN_EXECUTION' | 'PENDING_REGULARIZATION' | 'FINISHED' | 'CANCELLED';

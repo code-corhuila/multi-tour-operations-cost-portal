@@ -47,7 +47,7 @@ export function createExecutionGateway(apiClient: ApiClient): DepartureExecution
     panels: ['departure'],
     async getDeparture(code) {
       try {
-        return asDeparture(await apiClient.request<DepartureAnswer>(`/api/v1/operations-cost/departures/${code}`));
+        return asDeparture(await apiClient.request<DepartureAnswer>(`/api/v1/operations-cost/departures/${encodeURIComponent(code)}`));
       } catch (error) {
         if (typeof error === 'object' && error !== null && (error as { status?: number }).status === 404) return undefined;
         throw translate(error);
