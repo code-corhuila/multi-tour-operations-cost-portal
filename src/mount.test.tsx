@@ -47,6 +47,26 @@ describe('operations portal mount (RN-OPS-PT-01)', () => {
     unmount();
   });
 
+  it('C·the_vehicles_section_is_in_the_departures_area_for_the_administrator_and_reads_the_service', async () => {
+    const element = document.createElement('div');
+    document.body.appendChild(element);
+    const client = { request: request() };
+    const unmount = mount(element, { ...props(['TENANT_ADMINISTRATOR'], client), area: 'departures' });
+    expect(await screen.findByRole('heading', { name: 'Vehículos' })).toBeInTheDocument();
+    expect(await screen.findByText('Aún no hay vehículos registrados.')).toBeInTheDocument();
+    expect(client.request).toHaveBeenCalledWith(expect.stringContaining('/api/v1/operations-cost/vehicles'));
+    unmount();
+  });
+
+  it('C·the_vehicles_section_is_not_drawn_for_a_role_that_cannot_schedule', async () => {
+    const element = document.createElement('div');
+    document.body.appendChild(element);
+    const unmount = mount(element, { ...props(['OPERATIONAL_COLLABORATOR']), area: 'departures' });
+    expect(await screen.findByRole('heading', { name: 'Salidas' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Vehículos' })).not.toBeInTheDocument();
+    unmount();
+  });
+
   it('U·schedule_flow_goes_list_form_list: the Administrator opens the form and returns with the result line', async () => {
     const element = document.createElement('div');
     document.body.appendChild(element);
@@ -115,7 +135,7 @@ describe('operations portal mount (RN-OPS-PT-01)', () => {
     }
   });
 
-  it('C·the_list_and_the_edit_stay_on_the_test_adapter: the client is not called', async () => {
+  it('C·the_list_and_the_edit_stay_on_the_test_adapter: the client is asked only for the vehicles', async () => {
     const apiClient = { request: request() };
     const element = document.createElement('div');
     document.body.appendChild(element);
@@ -124,7 +144,8 @@ describe('operations portal mount (RN-OPS-PT-01)', () => {
     await screen.findByText('SAL-018');
     fireEvent.click(screen.getAllByRole('button', { name: /Editar/ })[0]);
     expect(await screen.findByRole('heading', { name: /Editar salida/ })).toBeInTheDocument();
-    expect(apiClient.request).not.toHaveBeenCalled();
+    // only the section of vehicles talks to the service; the list and the edit never do
+    expect((apiClient.request as ReturnType<typeof vi.fn>).mock.calls.every(([path]) => String(path).includes('/operations-cost/vehicles'))).toBe(true);
     unmount();
   });
 });
