@@ -261,9 +261,13 @@ describe('start and end over the service (spec 008)', () => {
   });
 
   function service(initial: string, onPost: (path: string, body: Record<string, unknown>) => unknown) {
-    const request = vi.fn(async (path: string, init?: { method?: string; body?: Record<string, unknown> }) =>
-      init?.method === 'POST' ? onPost(path, init.body ?? {}) : answer(initial),
-    );
+    // the service answers the latest state when the departure is read again after a recording
+    let current: unknown = answer(initial);
+    const request = vi.fn(async (path: string, init?: { method?: string; body?: Record<string, unknown> }) => {
+      if (init?.method !== 'POST') return current;
+      current = await onPost(path, init.body ?? {});
+      return current;
+    });
     render(
       <DepartureExecutionPage gateway={createExecutionGateway({ request } as unknown as ApiClient)} code="SAL-031" canManage onBack={vi.fn()} />,
     );
@@ -409,10 +413,16 @@ describe('adding vehicles to a departure over the service (spec 008)', () => {
     const many = opts.many
       ? { data: Array.from({ length: opts.many }, (_, i) => ({ vehicleId: `m-${i}`, name: `Vehículo ${i}`, capacity: 5 })), meta: { page: 1, limit: 100, total: opts.many, totalPages: 1 } }
       : tenantVehicles;
+    let current: unknown;
     const request = vi.fn(async (path: string, init?: { method?: string; body?: Record<string, unknown> }) => {
       if (path.includes('/vehicles?')) return many;
-      if (init?.method === 'POST') return opts.onPost?.(init.body ?? {});
-      return answer(opts.status ?? 'SCHEDULED', opts.transport ?? true, [{ vehicleId: 'veh-1', name: 'Van', capacity: 12 }], 12, opts.booked ?? 0);
+      if (init?.method === 'POST') {
+        const posted = await opts.onPost?.(init.body ?? {});
+        // read again, the service says the seats it holds even when the answer of an addition says zero
+        current = posted && typeof posted === 'object' ? { ...posted, booked: opts.booked ?? 0 } : undefined;
+        return posted;
+      }
+      return current ?? answer(opts.status ?? 'SCHEDULED', opts.transport ?? true, [{ vehicleId: 'veh-1', name: 'Van', capacity: 12 }], 12, opts.booked ?? 0);
     });
     render(
       <DepartureExecutionPage
