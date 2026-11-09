@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDepartureFixture } from './fixture';
 import { DepartureExecutionPage } from './DepartureExecutionPage';
@@ -376,5 +376,105 @@ describe('start and end over the service (spec 008)', () => {
     const posts = request.mock.calls.filter(([, init]) => init?.method === 'POST').map(([, init]) => init as { headers: Record<string, string>; body: Record<string, unknown> });
     expect(posts[0].body).not.toHaveProperty('cause');
     expect(posts[1].headers['Idempotency-Key']).toBe(posts[0].headers['Idempotency-Key']);
+  });
+});
+
+// Spec 008 PT8-04 (AC-PT-08.7): the Administrator adds vehicles to a scheduled departure of a tour that requires transport.
+describe('adding vehicles to a departure over the service (spec 008)', () => {
+  const tenantVehicles = {
+    data: [
+      { vehicleId: 'veh-1', name: 'Van', capacity: 12 },
+      { vehicleId: 'veh-2', name: 'Bus', capacity: 30 },
+    ],
+    meta: { page: 1, limit: 100, total: 2, totalPages: 1 },
+  };
+  const answer = (status: string, transportRequired: boolean, vehicles: object[], capacity: number) => ({
+    code: 'SAL-031',
+    serviceId: 'tour-1',
+    status,
+    scheduledStart: '2026-12-01T13:00:00Z',
+    scheduledEnd: '2026-12-01T21:00:00Z',
+    capacity,
+    booked: 0,
+    transportRequired,
+    pendingRegularization: false,
+    interrupted: false,
+    vehicles,
+  });
+
+  function service(opts: { status?: string; transport?: boolean; canSchedule?: boolean; onPost?: (body: Record<string, unknown>) => unknown } = {}) {
+    const request = vi.fn(async (path: string, init?: { method?: string; body?: Record<string, unknown> }) => {
+      if (path.includes('/vehicles?')) return tenantVehicles;
+      if (init?.method === 'POST') return opts.onPost?.(init.body ?? {});
+      return answer(opts.status ?? 'SCHEDULED', opts.transport ?? true, [{ vehicleId: 'veh-1', name: 'Van', capacity: 12 }], 12);
+    });
+    render(
+      <DepartureExecutionPage
+        gateway={createExecutionGateway({ request } as unknown as ApiClient)}
+        code="SAL-031"
+        canManage
+        canSchedule={opts.canSchedule ?? true}
+        onBack={vi.fn()}
+      />,
+    );
+    return request;
+  }
+
+  it('U·the_vehicles_not_yet_on_the_departure_are_offered_and_adding_them_shows_the_new_capacity', async () => {
+    const request = service({
+      onPost: () => answer('SCHEDULED', true, [{ vehicleId: 'veh-1', name: 'Van', capacity: 12 }, { vehicleId: 'veh-2', name: 'Bus', capacity: 30 }], 18),
+    });
+    expect(await screen.findByRole('heading', { name: 'Agregar vehículos' })).toBeInTheDocument();
+    expect(await screen.findByLabelText(/Bus/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Van/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText(/Bus/));
+    fireEvent.click(screen.getByRole('button', { name: 'Agregar vehículos' }));
+    expect(await screen.findByText(/Vehículos agregados. Capacidad efectiva: 18/)).toBeInTheDocument();
+    expect(request).toHaveBeenCalledWith(
+      '/api/v1/operations-cost/departures/SAL-031/vehicles',
+      expect.objectContaining({ method: 'POST', body: { vehicleIds: ['veh-2'] } }),
+    );
+    expect(screen.getByText('18 cupos · 0 reservados')).toBeInTheDocument();
+  });
+
+  it('U·nothing_is_sent_without_a_vehicle_chosen', async () => {
+    const request = service();
+    await screen.findByLabelText(/Bus/);
+    fireEvent.click(screen.getByRole('button', { name: 'Agregar vehículos' }));
+    expect(await screen.findByText('Elige al menos un vehículo.')).toBeInTheDocument();
+    expect(request.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+  });
+
+  it('U·the_panel_is_not_drawn_for_a_non_administrator_a_tour_without_transport_or_a_departure_that_is_not_scheduled', async () => {
+    for (const opts of [{ canSchedule: false }, { transport: false }, { status: 'IN_EXECUTION' }]) {
+      const { unmount } = render(<div />);
+      unmount();
+      service(opts);
+      await screen.findByRole('heading', { name: 'SAL-031' });
+      expect(screen.queryByRole('heading', { name: 'Agregar vehículos' })).not.toBeInTheDocument();
+      cleanup();
+    }
+  });
+
+  it('U·a_refusal_for_an_overlap_is_told_and_the_choice_stays', async () => {
+    service({ onPost: () => Promise.reject({ status: 422, code: 'BUSINESS_RULE_VIOLATION', traceId: 't-9' }) });
+    fireEvent.click(await screen.findByLabelText(/Bus/));
+    fireEvent.click(screen.getByRole('button', { name: 'Agregar vehículos' }));
+    expect(await screen.findByText(/El servicio no aceptó los vehículos/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Bus/)).toBeChecked();
+    expect(screen.queryByText(/t-9/)).not.toBeInTheDocument();
+  });
+
+  it('U·a_retry_reuses_the_key_and_another_choice_renews_it', async () => {
+    let calls = 0;
+    const request = service({
+      onPost: () => (++calls < 3 ? Promise.reject({ status: 503, code: 'SERVICE_UNAVAILABLE' }) : answer('SCHEDULED', true, [], 12)),
+    });
+    fireEvent.click(await screen.findByLabelText(/Bus/));
+    fireEvent.click(screen.getByRole('button', { name: 'Agregar vehículos' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Reintentar' }));
+    await waitFor(() => expect(calls).toBe(2));
+    const keys = () => request.mock.calls.filter(([, init]) => init?.method === 'POST').map(([, init]) => (init as { headers: Record<string, string> }).headers['Idempotency-Key']);
+    expect(keys()[0]).toBe(keys()[1]);
   });
 });
