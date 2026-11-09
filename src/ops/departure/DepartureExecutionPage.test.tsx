@@ -2,6 +2,8 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { createDepartureFixture } from './fixture';
 import { DepartureExecutionPage } from './DepartureExecutionPage';
+import type { ApiClient } from '../../contract';
+import { createExecutionGateway } from './execution';
 import type { DepartureExecutionGateway } from './gateway';
 import { panelsFor } from './panels';
 
@@ -235,5 +237,88 @@ describe('departure execution page over the service (spec 008)', () => {
   it('U·a_departure_the_service_does_not_have_says_so', async () => {
     setup('SAL-404', true, { ...real(), getDeparture: async () => undefined });
     expect(await screen.findByText('No encontramos esta salida.')).toBeInTheDocument();
+  });
+});
+
+// Spec 008 PT8-03 (AC-PT-08.3, -08.4, -08.6): start and end over the adapter of the service, with a fake client that plays the service.
+describe('start and end over the service (spec 008)', () => {
+  const answer = (status: string, extra: object = {}) => ({
+    code: 'SAL-031',
+    serviceId: 'tour-1',
+    status,
+    scheduledStart: '2026-12-01T13:00:00Z',
+    scheduledEnd: '2026-12-01T21:00:00Z',
+    capacity: 12,
+    booked: 0,
+    pendingRegularization: false,
+    interrupted: false,
+    vehicles: [],
+    ...extra,
+  });
+
+  function service(initial: string, onPost: (path: string, body: Record<string, unknown>) => unknown) {
+    const request = vi.fn(async (path: string, init?: { method?: string; body?: Record<string, unknown> }) =>
+      init?.method === 'POST' ? onPost(path, init.body ?? {}) : answer(initial),
+    );
+    render(
+      <DepartureExecutionPage gateway={createExecutionGateway({ request } as unknown as ApiClient)} code="SAL-031" canManage onBack={vi.fn()} />,
+    );
+    return request;
+  }
+
+  it('U·a_start_goes_to_the_service_and_the_page_shows_the_departure_in_execution_with_the_finish_panel', async () => {
+    const request = service('SCHEDULED', () => answer('IN_EXECUTION', { actualStart: '2026-12-01T13:10:00Z' }));
+    typeStart('2026-12-01T08:10');
+    clickStart();
+    expect(await screen.findByRole('heading', { name: 'Registrar la finalización o la interrupción' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Registrar el inicio real' })).not.toBeInTheDocument();
+    expect(screen.getByText('2026-12-01 08:10')).toBeInTheDocument();
+    expect(request).toHaveBeenCalledWith(
+      '/api/v1/operations-cost/departures/SAL-031/executions',
+      expect.objectContaining({ method: 'POST', body: { startedAt: '2026-12-01T13:10:00Z' } }),
+    );
+  });
+
+  it('U·an_early_start_is_refused_beside_the_field_and_nothing_is_sent', async () => {
+    const request = service('SCHEDULED', () => answer('IN_EXECUTION'));
+    typeStart('2026-12-01T07:00');
+    clickStart();
+    expect(await screen.findByText('El inicio real no puede ser anterior a la hora programada.')).toBeInTheDocument();
+    expect(request.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+  });
+
+  it('U·a_refusal_of_the_service_is_said_and_the_data_stay', async () => {
+    service('SCHEDULED', () => Promise.reject({ status: 422, code: 'BUSINESS_RULE_VIOLATION', traceId: 't-1' }));
+    typeStart('2026-12-01T08:10');
+    clickStart();
+    expect(await screen.findByText(/El servicio no aceptó el inicio/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Hora de inicio real')).toHaveValue('2026-12-01T08:10');
+    expect(screen.queryByText(/t-1/)).not.toBeInTheDocument();
+  });
+
+  it('U·a_retry_after_the_network_failed_reuses_the_key', async () => {
+    let calls = 0;
+    const request = service('SCHEDULED', () => (++calls === 1 ? Promise.reject({ status: 503, code: 'SERVICE_UNAVAILABLE' }) : answer('IN_EXECUTION', { actualStart: '2026-12-01T13:10:00Z' })));
+    typeStart('2026-12-01T08:10');
+    clickStart();
+    fireEvent.click(await screen.findByRole('button', { name: 'Reintentar' }));
+    await screen.findByRole('heading', { name: 'Registrar la finalización o la interrupción' });
+    const keys = request.mock.calls.filter(([, init]) => init?.method === 'POST').map(([, init]) => (init as { headers: Record<string, string> }).headers['Idempotency-Key']);
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).toBe(keys[1]);
+  });
+
+  it('U·an_interruption_with_its_cause_ends_the_departure_and_shows_it', async () => {
+    service('IN_EXECUTION', (_path, body) =>
+      answer('FINISHED', { actualStart: '2026-12-01T13:10:00Z', actualEnd: '2026-12-01T19:00:00Z', interrupted: body.result === 'INTERRUPTED', interruptionCause: body.cause }),
+    );
+    fireEvent.change(await screen.findByLabelText('Hora de finalización real'), { target: { value: '2026-12-01T14:00' } });
+    fireEvent.change(screen.getByLabelText('Resultado'), { target: { value: 'INTERRUPTED' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar finalización' }));
+    expect(await screen.findByText('Ingresa la causa y la evidencia de la interrupción.')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Interrupción (causa y evidencia)'), { target: { value: 'Heavy rain closed the trail' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar finalización' }));
+    expect(await screen.findByText('Heavy rain closed the trail')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Registrar la finalización o la interrupción' })).not.toBeInTheDocument();
   });
 });
