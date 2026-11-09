@@ -48,10 +48,12 @@ export function DepartureExecutionPage({ gateway, code, canManage, onBack }: Pro
   } else if (!state.data) body = <p className="operator-copy">No encontramos esta salida.</p>;
   else {
     const departure = state.data;
-    body = panelsFor(departure.status).map((id) => {
-      const Panel = DRAWN[id];
-      return Panel && <Panel key={id} departure={departure} gateway={gateway} canManage={canManage} onChanged={set} />;
-    });
+    body = panelsFor(departure.status)
+      .filter((id) => !gateway.panels || gateway.panels.includes(id))
+      .map((id) => {
+        const Panel = DRAWN[id];
+        return Panel && <Panel key={id} departure={departure} gateway={gateway} canManage={canManage} onChanged={set} />;
+      });
   }
 
   return (
@@ -65,7 +67,7 @@ export function DepartureExecutionPage({ gateway, code, canManage, onBack }: Pro
           Volver a salidas
         </button>
       </header>
-      <p className="operator-eyebrow">Datos de prueba</p>
+      {!gateway.connected && <p className="operator-eyebrow">Datos de prueba</p>}
       {!canManage && (
         <p className="operator-access-note">
           Tu usuario no tiene el permiso Gestionar ejecución de salidas: puedes consultar la salida, pero no registrar inicio, finalización, novedades ni
