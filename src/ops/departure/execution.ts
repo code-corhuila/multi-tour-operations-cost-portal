@@ -1,7 +1,7 @@
 import type { ApiClient } from '../../contract';
 import { readVehicles, translate } from '../departures/scheduling';
 import { TENANT_TIME_ZONE, fromInstant, toInstant } from '../departures/time';
-import type { Departure, DepartureExecutionGateway, DepartureStatus } from './gateway';
+import type { Departure, DepartureExecutionGateway, DepartureStatus, ReservationState, ServiceResult } from './gateway';
 
 // The adapter of the page of a departure to the operations-cost service (spec 008 plan D-02). Only what the service offers is
 // served: reading a departure, adding vehicles to it, recording its start and recording its end or interruption. What it does not offer yet is refused
@@ -21,6 +21,19 @@ interface DepartureAnswer {
   startAlert: boolean;
   transportRequired?: boolean;
   vehicles: { vehicleId: string; name: string }[];
+  // Present only when the service could read the reservations of the departure (contract 0.7.0).
+  travelersServed?: number;
+  reservations?: {
+    reservationId: string;
+    customer: string;
+    service?: string;
+    travelers: number;
+    state: ReservationState;
+    result?: ServiceResult;
+    travelersServed?: number;
+    noShow?: boolean;
+    cause?: string;
+  }[];
 }
 
 const wall = (instant?: string) => (instant ? fromInstant(instant, TENANT_TIME_ZONE) : undefined);
@@ -44,7 +57,9 @@ function asDeparture(d: DepartureAnswer): Departure {
     pendingRegularization: d.pendingRegularization,
     startAlert: d.startAlert,
     ...(d.interruptionCause ? { interruptionCause: d.interruptionCause } : {}),
-    reservations: [],
+    reservations: d.reservations ?? [],
+    reservationsUnavailable: d.reservations === undefined,
+    ...(d.travelersServed === undefined ? {} : { travelersServed: d.travelersServed }),
     novelties: [],
     history: [],
   };
@@ -53,7 +68,7 @@ function asDeparture(d: DepartureAnswer): Departure {
 export function createExecutionGateway(apiClient: ApiClient): DepartureExecutionGateway {
   return {
     connected: true,
-    panels: ['departure', 'vehicles', 'start', 'finish', 'regularize'],
+    panels: ['departure', 'vehicles', 'start', 'reservations', 'finish', 'regularize'],
     listVehicles: () => readVehicles(apiClient),
     async addVehicles({ code, vehicleIds, key }) {
       return record(`${DEPARTURES}/${encodeURIComponent(code)}/vehicles`, key, () => ({ vehicleIds }));
@@ -77,7 +92,17 @@ export function createExecutionGateway(apiClient: ApiClient): DepartureExecution
         ...(result === 'INTERRUPTED' ? { cause } : {}),
       }));
     },
-    registerServices: notAvailable,
+    async registerServices({ code, entries, key }) {
+      return record(`${DEPARTURES}/${encodeURIComponent(code)}/services`, key, () => ({
+        services: entries.map((e) => ({
+          reservationId: e.reservationId,
+          result: e.result,
+          travelersServed: e.travelersServed,
+          ...(e.noShow ? { noShow: true } : {}),
+          ...(e.cause.trim() ? { cause: e.cause.trim() } : {}),
+        })),
+      }));
+    },
     registerNovelty: notAvailable,
     async registerRegularization({ code, result, startedAt, finishedAt, earlyStartMotive, interruption, key }) {
       // The service cannot cancel a departure yet (HU-OPS-006): "not done" is never sent. The fields that do not apply are left out.
@@ -95,7 +120,13 @@ export function createExecutionGateway(apiClient: ApiClient): DepartureExecution
   // The body is built inside the guard: a wall clock that cannot be converted is a failure that is told, and nothing is sent.
   async function record(path: string, key: string, body: () => Record<string, unknown>): Promise<Departure> {
     try {
-      return asDeparture(await apiClient.request<DepartureAnswer>(path, { method: 'POST', headers: { 'Idempotency-Key': key }, body: body() }));
+      const answer = await apiClient.request<DepartureAnswer>(path, { method: 'POST', headers: { 'Idempotency-Key': key }, body: body() });
+      // Only the services answer the reservations: after any other recording the departure is read again, so the page keeps them.
+      if (answer.reservations === undefined) {
+        const fresh = await apiClient.request<DepartureAnswer>(`${DEPARTURES}/${encodeURIComponent(answer.code)}`).catch(() => undefined);
+        return asDeparture(fresh ?? answer);
+      }
+      return asDeparture(answer);
     } catch (error) {
       throw translate(error);
     }

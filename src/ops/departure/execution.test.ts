@@ -83,6 +83,7 @@ describe('the connected execution gateway', () => {
         path: '/api/v1/operations-cost/departures/SAL-031/executions',
         init: { method: 'POST', headers: { 'Idempotency-Key': 'start-key-0001' }, body: { startedAt: '2026-12-01T13:10:00Z' } },
       },
+      { path: '/api/v1/operations-cost/departures/SAL-031', init: undefined },
     ]);
     expect(read).toMatchObject({ status: 'IN_EXECUTION', actualStart: '2026-12-01T08:10' });
   });
@@ -92,13 +93,13 @@ describe('the connected execution gateway', () => {
     const gateway = createExecutionGateway(client);
     await gateway.registerFinish({ code: 'SAL-031', finishedAt: '2026-12-01T14:00', result: 'FINISHED', cause: '', key: 'finish-key-001' });
     await gateway.registerFinish({ code: 'SAL-031', finishedAt: '2026-12-01T14:00', result: 'INTERRUPTED', cause: 'Heavy rain', key: 'finish-key-002' });
-    expect(calls.map((c) => c.path)).toEqual(Array(2).fill('/api/v1/operations-cost/departures/SAL-031/finish'));
+    expect(calls.filter((c) => c.path.endsWith('/finish'))).toHaveLength(2);
     expect(calls[0].init).toEqual({
       method: 'POST',
       headers: { 'Idempotency-Key': 'finish-key-001' },
       body: { finishedAt: '2026-12-01T19:00:00Z', result: 'FINISHED' },
     });
-    expect(calls[1].init).toMatchObject({ body: { result: 'INTERRUPTED', cause: 'Heavy rain' } });
+    expect(calls.filter((c) => c.path.endsWith('/finish'))[1].init).toMatchObject({ body: { result: 'INTERRUPTED', cause: 'Heavy rain' } });
   });
 
   it('C·a_refused_recording_is_translated_by_its_status', async () => {
@@ -141,6 +142,7 @@ describe('the connected execution gateway', () => {
         path: '/api/v1/operations-cost/departures/SAL-031/vehicles',
         init: { method: 'POST', headers: { 'Idempotency-Key': 'vehicles-key-1' }, body: { vehicleIds: ['veh-2'] } },
       },
+      { path: '/api/v1/operations-cost/departures/SAL-031', init: undefined },
     ]);
     expect(read).toMatchObject({ capacity: 18, vehicles: ['Van', 'Bus'], vehicleIds: ['veh-1', 'veh-2'] });
   });
@@ -163,17 +165,79 @@ describe('the connected execution gateway', () => {
     await expect(failing({ status: 500 }).getDeparture('SAL-031')).rejects.toBeInstanceOf(Failed);
   });
 
+  it('C·the_reservations_the_what_each_received_and_the_real_base_are_read_from_the_service', async () => {
+    const { client } = fakeClient(() =>
+      departure({
+        travelersServed: 3,
+        reservations: [
+          { reservationId: 'r-1', customer: 'Ana Perez', travelers: 4, state: 'IN_EXECUTION', result: 'DELIVERED', travelersServed: 3, cause: 'One stayed' },
+          { reservationId: 'r-2', customer: 'Luis Gomez', travelers: 2, state: 'IN_EXECUTION' },
+        ],
+      }),
+    );
+    const read = await createExecutionGateway(client).getDeparture('SAL-031');
+    expect(read?.travelersServed).toBe(3);
+    expect(read?.reservationsUnavailable).toBe(false);
+    expect(read?.reservations).toMatchObject([
+      { reservationId: 'r-1', customer: 'Ana Perez', travelers: 4, state: 'IN_EXECUTION', result: 'DELIVERED', travelersServed: 3, cause: 'One stayed' },
+      { reservationId: 'r-2', customer: 'Luis Gomez', travelers: 2, state: 'IN_EXECUTION' },
+    ]);
+    expect(read?.reservations[1].result).toBeUndefined();
+  });
+
+  it('C·a_departure_the_service_answers_without_reservations_says_they_could_not_be_read', async () => {
+    const { client } = fakeClient(() => departure());
+    const read = await createExecutionGateway(client).getDeparture('SAL-031');
+    expect(read?.reservations).toEqual([]);
+    expect(read?.reservationsUnavailable).toBe(true);
+  });
+
+  it('C·the_services_are_sent_with_the_travelers_served_the_no_show_and_only_the_cause_that_exists', async () => {
+    const { client, calls } = fakeClient(() => departure({ travelersServed: 4, reservations: [{ reservationId: 'r-1', customer: 'Ana', travelers: 4, state: 'IN_EXECUTION' }] }));
+    const read = await createExecutionGateway(client).registerServices({
+      code: 'SAL-031',
+      key: 'services-key-1',
+      entries: [
+        { reservationId: 'r-1', result: 'DELIVERED', travelersServed: 4, noShow: false, cause: '' },
+        { reservationId: 'r-2', result: 'NOT_DELIVERED', travelersServed: 0, noShow: true, cause: ' did not come ' },
+      ],
+    });
+    expect(calls).toEqual([
+      {
+        path: '/api/v1/operations-cost/departures/SAL-031/services',
+        init: {
+          method: 'POST',
+          headers: { 'Idempotency-Key': 'services-key-1' },
+          body: {
+            services: [
+              { reservationId: 'r-1', result: 'DELIVERED', travelersServed: 4 },
+              { reservationId: 'r-2', result: 'NOT_DELIVERED', travelersServed: 0, noShow: true, cause: 'did not come' },
+            ],
+          },
+        },
+      },
+    ]);
+    expect(read.travelersServed).toBe(4);
+    expect(read.reservationsUnavailable).toBe(false);
+  });
+
+  it('C·a_refused_save_of_the_services_is_translated_by_its_status', async () => {
+    const save = { code: 'SAL-031', key: 'services-key-1', entries: [{ reservationId: 'r-1', result: 'DELIVERED' as const, travelersServed: 4, noShow: false, cause: '' }] };
+    await expect(failing({ status: 422, code: 'BUSINESS_RULE_VIOLATION' }).registerServices(save)).rejects.toBeInstanceOf(Refused);
+    await expect(failing({ status: 503 }).registerServices(save)).rejects.toBeInstanceOf(Unavailable);
+    await expect(failing({ status: 400 }).registerServices(save)).rejects.toBeInstanceOf(FieldError);
+  });
+
   it('U·it_says_it_talks_to_the_service_and_offers_the_departure_the_start_the_finish_and_the_regularization', () => {
     const gateway = createExecutionGateway(fakeClient(() => departure()).client);
     expect(gateway.connected).toBe(true);
-    expect(gateway.panels).toEqual(['departure', 'vehicles', 'start', 'finish', 'regularize']);
+    expect(gateway.panels).toEqual(['departure', 'vehicles', 'start', 'reservations', 'finish', 'regularize']);
   });
 
   it('U·what_the_service_does_not_offer_yet_is_refused_and_never_sent', async () => {
     const { client, calls } = fakeClient(() => departure());
     const gateway = createExecutionGateway(client);
     await expect(gateway.registerNovelty({ code: 'SAL-031', reservationId: 'r', detail: 'd', emergency: false, key: 'k' })).rejects.toThrow('NOT_AVAILABLE');
-    await expect(gateway.registerServices({ code: 'SAL-031', entries: [], key: 'k' })).rejects.toThrow('NOT_AVAILABLE');
     await expect(gateway.registerRegularization({ code: 'SAL-031', result: 'NOT_DONE', startedAt: '', finishedAt: '', earlyStartMotive: '', interruption: '', notDoneCause: 'Rain', key: 'k' })).rejects.toThrow('NOT_AVAILABLE');
     expect(calls).toHaveLength(0);
   });
