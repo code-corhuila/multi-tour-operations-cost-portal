@@ -257,6 +257,7 @@ describe('start and end over the service (spec 008)', () => {
     pendingRegularization: false,
     interrupted: false,
     vehicles: [],
+    reservations: [],
     ...extra,
   });
 
@@ -405,6 +406,7 @@ describe('adding vehicles to a departure over the service (spec 008)', () => {
     pendingRegularization: false,
     interrupted: false,
     vehicles,
+    reservations: [],
   });
 
   function service(
