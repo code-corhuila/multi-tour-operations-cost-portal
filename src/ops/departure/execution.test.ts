@@ -64,6 +64,17 @@ describe('the connected execution gateway', () => {
     expect(read).toMatchObject({ status: 'FINISHED', actualEnd: '2026-12-01T14:00', mark: 'Interrumpida', interruptionCause: 'Heavy rain closed the trail' });
   });
 
+  it('C·a_code_is_encoded_in_the_path_so_it_cannot_change_the_url', async () => {
+    const { client, calls } = fakeClient(() => departure());
+    await createExecutionGateway(client).getDeparture('SAL-031/../vehicles?x=1#y');
+    expect(calls[0].path).toBe('/api/v1/operations-cost/departures/SAL-031%2F..%2Fvehicles%3Fx%3D1%23y');
+  });
+
+  it('C·a_failure_with_no_status_is_a_failure_and_not_a_missing_departure', async () => {
+    await expect(failing(new Error('boom')).getDeparture('SAL-031')).rejects.toBeInstanceOf(Failed);
+    await expect(failing({ code: 'TIMEOUT' }).getDeparture('SAL-031')).rejects.toBeInstanceOf(Unavailable);
+  });
+
   it('C·a_departure_that_is_not_there_resolves_undefined', async () => {
     expect(await failing({ status: 404, code: 'NOT_FOUND' }).getDeparture('SAL-404')).toBeUndefined();
   });
@@ -83,6 +94,9 @@ describe('the connected execution gateway', () => {
   it('U·what_the_service_does_not_offer_yet_is_refused_and_never_sent', async () => {
     const { client, calls } = fakeClient(() => departure());
     const gateway = createExecutionGateway(client);
+    await expect(gateway.registerStart({ code: 'SAL-031', startedAt: '2026-12-01T08:00', key: 'k' })).rejects.toThrow('NOT_AVAILABLE');
+    await expect(gateway.registerFinish({ code: 'SAL-031', finishedAt: '2026-12-01T14:00', result: 'FINISHED', cause: '', key: 'k' })).rejects.toThrow('NOT_AVAILABLE');
+    await expect(gateway.registerNovelty({ code: 'SAL-031', reservationId: 'r', detail: 'd', emergency: false, key: 'k' })).rejects.toThrow('NOT_AVAILABLE');
     await expect(gateway.registerServices({ code: 'SAL-031', entries: [], key: 'k' })).rejects.toThrow('NOT_AVAILABLE');
     await expect(gateway.registerRegularization({ code: 'SAL-031', result: 'EXECUTED', startedAt: '', finishedAt: '', earlyStartMotive: '', interruption: '', notDoneCause: '', key: 'k' })).rejects.toThrow('NOT_AVAILABLE');
     expect(calls).toHaveLength(0);

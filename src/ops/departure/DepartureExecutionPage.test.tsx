@@ -225,6 +225,13 @@ describe('departure execution page over the service (spec 008)', () => {
     expect(within(panel).getByText('Heavy rain closed the trail')).toBeInTheDocument();
   });
 
+  it('U·without_an_interruption_there_is_no_cause_row_and_a_missing_end_shows_a_dash', async () => {
+    setup('SAL-031', true, real({ status: 'IN_EXECUTION', mark: '', interruptionCause: undefined, actualEnd: undefined }));
+    const panel = (await screen.findByRole('heading', { name: 'SAL-031' })).closest('section') as HTMLElement;
+    expect(within(panel).queryByText('Causa de la interrupción')).not.toBeInTheDocument();
+    expect(within(panel).getByText('Finalización real').closest('li')).toHaveTextContent('—');
+  });
+
   it('U·a_departure_the_service_does_not_have_says_so', async () => {
     setup('SAL-404', true, { ...real(), getDeparture: async () => undefined });
     expect(await screen.findByText('No encontramos esta salida.')).toBeInTheDocument();
