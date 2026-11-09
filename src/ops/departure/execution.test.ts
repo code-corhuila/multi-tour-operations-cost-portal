@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ApiClient } from '../../contract';
-import { Failed, Forbidden, Unavailable } from '../departures/model';
+import { FieldError, Failed, Forbidden, Refused, Unavailable } from '../departures/model';
 import { createExecutionGateway } from './execution';
 
 type Call = { path: string; init?: unknown };
@@ -75,6 +75,49 @@ describe('the connected execution gateway', () => {
     await expect(failing({ code: 'TIMEOUT' }).getDeparture('SAL-031')).rejects.toBeInstanceOf(Unavailable);
   });
 
+  it('C·the_start_is_sent_as_an_instant_with_its_key_and_the_answer_is_the_departure', async () => {
+    const { client, calls } = fakeClient(() => departure({ status: 'IN_EXECUTION', actualStart: '2026-12-01T13:10:00Z' }));
+    const read = await createExecutionGateway(client).registerStart({ code: 'SAL-031', startedAt: '2026-12-01T08:10', key: 'start-key-0001' });
+    expect(calls).toEqual([
+      {
+        path: '/api/v1/operations-cost/departures/SAL-031/executions',
+        init: { method: 'POST', headers: { 'Idempotency-Key': 'start-key-0001' }, body: { startedAt: '2026-12-01T13:10:00Z' } },
+      },
+    ]);
+    expect(read).toMatchObject({ status: 'IN_EXECUTION', actualStart: '2026-12-01T08:10' });
+  });
+
+  it('C·the_end_carries_its_result_and_only_an_interruption_carries_its_cause', async () => {
+    const { client, calls } = fakeClient(() => departure({ status: 'FINISHED', actualEnd: '2026-12-01T19:00:00Z' }));
+    const gateway = createExecutionGateway(client);
+    await gateway.registerFinish({ code: 'SAL-031', finishedAt: '2026-12-01T14:00', result: 'FINISHED', cause: '', key: 'finish-key-001' });
+    await gateway.registerFinish({ code: 'SAL-031', finishedAt: '2026-12-01T14:00', result: 'INTERRUPTED', cause: 'Heavy rain', key: 'finish-key-002' });
+    expect(calls.map((c) => c.path)).toEqual(Array(2).fill('/api/v1/operations-cost/departures/SAL-031/finish'));
+    expect(calls[0].init).toEqual({
+      method: 'POST',
+      headers: { 'Idempotency-Key': 'finish-key-001' },
+      body: { finishedAt: '2026-12-01T19:00:00Z', result: 'FINISHED' },
+    });
+    expect(calls[1].init).toMatchObject({ body: { result: 'INTERRUPTED', cause: 'Heavy rain' } });
+  });
+
+  it('C·a_refused_recording_is_translated_by_its_status', async () => {
+    const start = { code: 'SAL-031', startedAt: '2026-12-01T08:10', key: 'start-key-0001' };
+    await expect(failing({ status: 422, code: 'BUSINESS_RULE_VIOLATION' }).registerStart(start)).rejects.toBeInstanceOf(Refused);
+    await expect(failing({ status: 422, code: 'INVALID_STATUS_TRANSITION' }).registerStart(start)).rejects.toBeInstanceOf(Refused);
+    await expect(failing({ status: 403 }).registerStart(start)).rejects.toBeInstanceOf(Forbidden);
+    await expect(failing({ status: 503 }).registerStart(start)).rejects.toBeInstanceOf(Unavailable);
+    await expect(failing({ status: 400 }).registerStart(start)).rejects.toBeInstanceOf(FieldError);
+  });
+
+  it('C·a_wall_clock_that_cannot_be_converted_is_refused_before_anything_is_sent', async () => {
+    const { client, calls } = fakeClient(() => departure());
+    const gateway = createExecutionGateway(client);
+    await expect(gateway.registerStart({ code: 'SAL-031', startedAt: '12026-12-01T08:10', key: 'start-key-0001' })).rejects.toBeInstanceOf(Failed);
+    await expect(gateway.registerFinish({ code: 'SAL-031', finishedAt: 'x', result: 'FINISHED', cause: '', key: 'finish-key-001' })).rejects.toBeInstanceOf(Failed);
+    expect(calls).toHaveLength(0);
+  });
+
   it('C·a_departure_that_is_not_there_resolves_undefined', async () => {
     expect(await failing({ status: 404, code: 'NOT_FOUND' }).getDeparture('SAL-404')).toBeUndefined();
   });
@@ -85,17 +128,15 @@ describe('the connected execution gateway', () => {
     await expect(failing({ status: 500 }).getDeparture('SAL-031')).rejects.toBeInstanceOf(Failed);
   });
 
-  it('U·it_says_it_talks_to_the_service_and_offers_only_the_departure_panel_for_now', () => {
+  it('U·it_says_it_talks_to_the_service_and_offers_the_departure_the_start_and_the_finish', () => {
     const gateway = createExecutionGateway(fakeClient(() => departure()).client);
     expect(gateway.connected).toBe(true);
-    expect(gateway.panels).toEqual(['departure']);
+    expect(gateway.panels).toEqual(['departure', 'start', 'finish']);
   });
 
   it('U·what_the_service_does_not_offer_yet_is_refused_and_never_sent', async () => {
     const { client, calls } = fakeClient(() => departure());
     const gateway = createExecutionGateway(client);
-    await expect(gateway.registerStart({ code: 'SAL-031', startedAt: '2026-12-01T08:00', key: 'k' })).rejects.toThrow('NOT_AVAILABLE');
-    await expect(gateway.registerFinish({ code: 'SAL-031', finishedAt: '2026-12-01T14:00', result: 'FINISHED', cause: '', key: 'k' })).rejects.toThrow('NOT_AVAILABLE');
     await expect(gateway.registerNovelty({ code: 'SAL-031', reservationId: 'r', detail: 'd', emergency: false, key: 'k' })).rejects.toThrow('NOT_AVAILABLE');
     await expect(gateway.registerServices({ code: 'SAL-031', entries: [], key: 'k' })).rejects.toThrow('NOT_AVAILABLE');
     await expect(gateway.registerRegularization({ code: 'SAL-031', result: 'EXECUTED', startedAt: '', finishedAt: '', earlyStartMotive: '', interruption: '', notDoneCause: '', key: 'k' })).rejects.toThrow('NOT_AVAILABLE');
