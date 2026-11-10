@@ -30,7 +30,9 @@ type Errors = { concept?: string; amount?: string; justification?: string };
 // Panel "Costos operacionales" (spec 011): the real cost of a departure that started, apart from the commercial value sold (RF-009).
 export function CostsPanel({ departure, gateway, canManage }: PanelProps) {
   const started = departure.status === 'IN_EXECUTION' || departure.status === 'FINISHED';
-  const load = useMemo(() => () => (started && gateway.getCosts ? gateway.getCosts(departure.code) : Promise.resolve(undefined)), [gateway, departure.code, started]);
+  // a panel that is not offered asks nothing: no permission, no way to record, or a departure that has not started
+  const offered = canManage && !!gateway.recordCost && !!gateway.getCosts && started;
+  const load = useMemo(() => () => (offered ? gateway.getCosts!(departure.code) : Promise.resolve(undefined)), [gateway, departure.code, offered]);
   const { state, retry, set } = useAsync<CostSheet | undefined>(load);
   const [concept, setConcept] = useState('');
   const [amount, setAmount] = useState('');

@@ -6,5 +6,6 @@ export function parseMoney(text: string): number | undefined {
   const units = Number(match[1].replace(/\./g, ''));
   const decimals = Number((match[2] ?? '').padEnd(2, '0'));
   const total = units * 100 + decimals;
-  return total > 0 ? total : undefined;
+  // beyond the integers a number keeps exactly, the amount would be sent imprecise: it is refused
+  return total > 0 && Number.isSafeInteger(total) ? total : undefined;
 }

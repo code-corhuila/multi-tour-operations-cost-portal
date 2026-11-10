@@ -84,7 +84,7 @@ export function createExecutionGateway(apiClient: ApiClient): DepartureExecution
       try {
         const sheet = await apiClient.request<CostSheetAnswer>(`${DEPARTURES}/${encodeURIComponent(code)}/costs`);
         // an answer that is not a sheet is a failure that is told, never a screen that breaks
-        if (!Array.isArray(sheet?.data)) throw new Error('NOT_A_SHEET');
+        if (!Array.isArray(sheet?.data) || !Number.isFinite(sheet.totalCents) || !Number.isFinite(sheet.travelersServed)) throw new Error('NOT_A_SHEET');
         return {
           lines: sheet.data,
           totalCents: sheet.totalCents,

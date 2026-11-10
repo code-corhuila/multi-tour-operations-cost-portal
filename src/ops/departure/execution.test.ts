@@ -257,7 +257,7 @@ describe('the connected execution gateway', () => {
 
   it('C·an_answer_that_is_not_a_sheet_of_costs_is_a_failure', async () => {
     for (const bad of [{}, { data: [], totalCents: 'x', travelersServed: 0 }, { data: [], totalCents: 0 }]) {
-      await expect(createExecutionGateway(fakeClient(() => bad).client).getCosts!('SAL-031')).rejects.toBeInstanceOf(Unavailable);
+      await expect(createExecutionGateway(fakeClient(() => bad).client).getCosts!('SAL-031')).rejects.toBeInstanceOf(Failed);
     }
   });
 
