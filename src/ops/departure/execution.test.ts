@@ -255,6 +255,12 @@ describe('the connected execution gateway', () => {
     expect(sheet.lines[1]).toMatchObject({ mode: 'MANUAL', withoutParametrization: true, justification: 'Paid at the dock' });
   });
 
+  it('C·an_answer_that_is_not_a_sheet_of_costs_is_a_failure', async () => {
+    for (const bad of [{}, { data: [], totalCents: 'x', travelersServed: 0 }, { data: [], totalCents: 0 }]) {
+      await expect(createExecutionGateway(fakeClient(() => bad).client).getCosts!('SAL-031')).rejects.toBeInstanceOf(Failed);
+    }
+  });
+
   it('C·a_tour_without_a_catalogued_cost_has_no_base_cost_in_the_sheet', async () => {
     const { client } = fakeClient(() => ({ data: [], totalCents: 0, travelersServed: 0 }));
     const sheet = await createExecutionGateway(client).getCosts!('SAL-031');
@@ -294,7 +300,7 @@ describe('the connected execution gateway', () => {
   it('U·it_says_it_talks_to_the_service_and_offers_the_departure_the_start_the_finish_and_the_regularization', () => {
     const gateway = createExecutionGateway(fakeClient(() => departure()).client);
     expect(gateway.connected).toBe(true);
-    expect(gateway.panels).toEqual(['departure', 'vehicles', 'start', 'reservations', 'finish', 'regularize']);
+    expect(gateway.panels).toEqual(['departure', 'vehicles', 'start', 'reservations', 'finish', 'regularize', 'costs']);
   });
 
   it('U·what_the_service_does_not_offer_yet_is_refused_and_never_sent', async () => {

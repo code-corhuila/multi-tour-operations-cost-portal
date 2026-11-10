@@ -20,12 +20,12 @@ const clickStart = () => fireEvent.click(screen.getByRole('button', { name: 'Reg
 // over the test data of the departure gateway.
 describe('panels of a departure (RN-OPS-PT-31)', () => {
   it('U·panels_follow_the_status_of_the_departure: each status shows only its panels', () => {
-    expect(panelsFor('SCHEDULED')).toEqual(['departure', 'vehicles', 'start', 'reservations', 'history']);
-    expect(panelsFor('IN_EXECUTION')).toEqual(['departure', 'reservations', 'novelties', 'finish', 'history']);
-    expect(panelsFor('SCHEDULED', true)).toEqual(['departure', 'regularize', 'reservations', 'history']);
-    expect(panelsFor('IN_EXECUTION', true)).toEqual(['departure', 'reservations', 'novelties', 'finish', 'history']);
-    expect(panelsFor('FINISHED')).toEqual(['departure', 'reservations', 'novelties', 'history']);
-    expect(panelsFor('CANCELLED')).toEqual(['departure', 'reservations', 'history']);
+    expect(panelsFor('SCHEDULED')).toEqual(['departure', 'vehicles', 'start', 'reservations', 'costs', 'history']);
+    expect(panelsFor('IN_EXECUTION')).toEqual(['departure', 'reservations', 'novelties', 'finish', 'costs', 'history']);
+    expect(panelsFor('SCHEDULED', true)).toEqual(['departure', 'regularize', 'reservations', 'costs', 'history']);
+    expect(panelsFor('IN_EXECUTION', true)).toEqual(['departure', 'reservations', 'novelties', 'finish', 'costs', 'history']);
+    expect(panelsFor('FINISHED')).toEqual(['departure', 'reservations', 'novelties', 'costs', 'history']);
+    expect(panelsFor('CANCELLED')).toEqual(['departure', 'reservations', 'costs', 'history']);
   });
 });
 
@@ -265,6 +265,7 @@ describe('start and end over the service (spec 008)', () => {
     // the service answers the latest state when the departure is read again after a recording
     let current: unknown = answer(initial);
     const request = vi.fn(async (path: string, init?: { method?: string; body?: Record<string, unknown> }) => {
+      if (path.endsWith('/costs')) return { data: [], totalCents: 0, travelersServed: 0, baseCostCents: 2100 };
       if (init?.method !== 'POST') return current;
       current = await onPost(path, init.body ?? {});
       return current;
@@ -418,6 +419,7 @@ describe('adding vehicles to a departure over the service (spec 008)', () => {
     let current: unknown;
     const request = vi.fn(async (path: string, init?: { method?: string; body?: Record<string, unknown> }) => {
       if (path.includes('/vehicles?')) return many;
+      if (path.endsWith('/costs')) return { data: [], totalCents: 0, travelersServed: 0, baseCostCents: 2100 };
       if (init?.method === 'POST') {
         const posted = await opts.onPost?.(init.body ?? {});
         // read again, the service says the seats it holds even when the answer of an addition says zero

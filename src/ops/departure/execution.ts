@@ -75,7 +75,7 @@ function asDeparture(d: DepartureAnswer): Departure {
 export function createExecutionGateway(apiClient: ApiClient): DepartureExecutionGateway {
   return {
     connected: true,
-    panels: ['departure', 'vehicles', 'start', 'reservations', 'finish', 'regularize'],
+    panels: ['departure', 'vehicles', 'start', 'reservations', 'finish', 'regularize', 'costs'],
     listVehicles: () => readVehicles(apiClient),
     async addVehicles({ code, vehicleIds, key }) {
       return record(`${DEPARTURES}/${encodeURIComponent(code)}/vehicles`, key, () => ({ vehicleIds }));
@@ -83,6 +83,8 @@ export function createExecutionGateway(apiClient: ApiClient): DepartureExecution
     async getCosts(code): Promise<CostSheet> {
       try {
         const sheet = await apiClient.request<CostSheetAnswer>(`${DEPARTURES}/${encodeURIComponent(code)}/costs`);
+        // an answer that is not a sheet is a failure that is told, never a screen that breaks
+        if (!Array.isArray(sheet?.data) || !Number.isFinite(sheet.totalCents) || !Number.isFinite(sheet.travelersServed)) throw new Error('NOT_A_SHEET');
         return {
           lines: sheet.data,
           totalCents: sheet.totalCents,
