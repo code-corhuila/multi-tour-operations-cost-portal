@@ -1,4 +1,4 @@
-import type { Departure, DepartureExecutionGateway, HistoryEntry, ReservationService } from './gateway';
+import type { CostLine, CostSheet, Departure, DepartureExecutionGateway, HistoryEntry, ReservationService } from './gateway';
 
 // Test data, labelled as such on the page: one departure per status, fictitious (RN-OPS-PT-42).
 const who = 'Operador demo';
@@ -135,7 +135,42 @@ export function createDepartureFixture(): DepartureExecutionGateway {
     return copy(result);
   };
 
+  // Test data of the costs (HU-OPS-007): every tour has a catalogued cost here, a line is kept per key like the other recordings.
+  const BASE_COST_CENTS = 21_000_000;
+  const costLines = new Map<string, CostLine[]>();
+  const costAnswers = new Map<string, CostLine>();
+  const sheetOf = (code: string): CostSheet => {
+    const d = find(code);
+    const lines = (costLines.get(code) ?? []).map((l) => ({ ...l }));
+    const served = d.reservations.reduce((sum, r) => sum + (r.result === 'DELIVERED' ? (r.travelersServed ?? r.travelers) : 0), 0);
+    return { lines, totalCents: lines.reduce((sum, l) => sum + l.amountCents, 0), travelersServed: served, baseCostCents: BASE_COST_CENTS };
+  };
+
   return {
+    getCosts: async (code) => sheetOf(code),
+    recordCost: async ({ code, concept, mode, amountCents, justification, key }) => {
+      const reused = costAnswers.get(key);
+      if (reused) return { ...reused };
+      const d = find(code);
+      if (d.status !== 'IN_EXECUTION' && d.status !== 'FINISHED') throw new Error('INVALID_STATUS_TRANSITION');
+      const served = sheetOf(code).travelersServed;
+      if (mode === 'CALCULATED' && served < 1) throw new Error('BUSINESS_RULE_VIOLATION');
+      const line: CostLine =
+        mode === 'CALCULATED'
+          ? { costId: key, concept, amountCents: BASE_COST_CENTS * served, mode, unitCostCents: BASE_COST_CENTS, travelersServed: served, withoutParametrization: false, recordedAt: new Date().toISOString() }
+          : {
+              costId: key,
+              concept,
+              amountCents,
+              mode,
+              withoutParametrization: justification.trim() !== '',
+              ...(justification.trim() ? { justification: justification.trim() } : {}),
+              recordedAt: new Date().toISOString(),
+            };
+      costLines.set(code, [...(costLines.get(code) ?? []), line]);
+      costAnswers.set(key, line);
+      return { ...line };
+    },
     getDeparture: async (code) => {
       const found = departures.find((d) => d.code === code);
       return found && copy(found);
