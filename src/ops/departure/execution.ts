@@ -1,7 +1,7 @@
 import type { ApiClient } from '../../contract';
 import { readVehicles, translate } from '../departures/scheduling';
 import { TENANT_TIME_ZONE, fromInstant, toInstant } from '../departures/time';
-import type { Departure, DepartureExecutionGateway, DepartureStatus, ReservationState, ServiceResult } from './gateway';
+import type { CostLine, CostSheet, Departure, DepartureExecutionGateway, DepartureStatus, ReservationState, ServiceResult } from './gateway';
 
 // The adapter of the page of a departure to the operations-cost service (spec 008 plan D-02). Only what the service offers is
 // served: reading a departure, adding vehicles to it, recording its start and recording its end or interruption. What it does not offer yet is refused
@@ -34,6 +34,13 @@ interface DepartureAnswer {
     noShow?: boolean;
     cause?: string;
   }[];
+}
+
+interface CostSheetAnswer {
+  data: CostLine[];
+  totalCents: number;
+  travelersServed: number;
+  baseCostCents?: number;
 }
 
 const wall = (instant?: string) => (instant ? fromInstant(instant, TENANT_TIME_ZONE) : undefined);
@@ -72,6 +79,34 @@ export function createExecutionGateway(apiClient: ApiClient): DepartureExecution
     listVehicles: () => readVehicles(apiClient),
     async addVehicles({ code, vehicleIds, key }) {
       return record(`${DEPARTURES}/${encodeURIComponent(code)}/vehicles`, key, () => ({ vehicleIds }));
+    },
+    async getCosts(code): Promise<CostSheet> {
+      try {
+        const sheet = await apiClient.request<CostSheetAnswer>(`${DEPARTURES}/${encodeURIComponent(code)}/costs`);
+        return {
+          lines: sheet.data,
+          totalCents: sheet.totalCents,
+          travelersServed: sheet.travelersServed,
+          ...(sheet.baseCostCents === undefined ? {} : { baseCostCents: sheet.baseCostCents }),
+        };
+      } catch (error) {
+        throw translate(error);
+      }
+    },
+    async recordCost({ code, concept, mode, amountCents, justification, key }): Promise<CostLine> {
+      try {
+        return await apiClient.request<CostLine>(`${DEPARTURES}/${encodeURIComponent(code)}/costs`, {
+          method: 'POST',
+          headers: { 'Idempotency-Key': key },
+          // a calculated cost carries neither an amount nor a justification: the service calculates it
+          body:
+            mode === 'CALCULATED'
+              ? { concept: concept.trim(), mode }
+              : { concept: concept.trim(), mode, amountCents, ...(justification.trim() ? { justification: justification.trim() } : {}) },
+        });
+      } catch (error) {
+        throw translate(error);
+      }
     },
     async getDeparture(code) {
       try {

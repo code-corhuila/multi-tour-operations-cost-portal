@@ -118,6 +118,39 @@ export interface AddVehiclesInput {
   key: string;
 }
 
+// The operational costs of a departure (HU-OPS-007). The amounts are minor units; the total is the service's sum of the lines.
+export type CostMode = 'CALCULATED' | 'MANUAL';
+
+export interface CostLine {
+  costId: string;
+  concept: string;
+  amountCents: number;
+  mode: CostMode;
+  unitCostCents?: number;
+  travelersServed?: number;
+  withoutParametrization: boolean;
+  justification?: string;
+  recordedAt: string;
+}
+
+export interface CostSheet {
+  lines: CostLine[];
+  totalCents: number;
+  travelersServed: number;
+  // The cost the catalog parametrizes for the tour; absent when the tour has none (no calculation, the expense needs its justification).
+  baseCostCents?: number;
+}
+
+// A calculated cost sends only its concept: the service computes the amount (api 007 D-03).
+export interface CostInput {
+  code: string;
+  concept: string;
+  mode: CostMode;
+  amountCents: number;
+  justification: string;
+  key: string;
+}
+
 export interface DepartureExecutionGateway {
   // True for the adapter that talks to the service; absent for the test data.
   connected?: boolean;
@@ -133,4 +166,7 @@ export interface DepartureExecutionGateway {
   // Only the adapter of the service has them: the vehicles of the tenant, and adding some to a scheduled departure (HU-OPS-002).
   listVehicles?(): Promise<Vehicle[]>;
   addVehicles?(input: AddVehiclesInput): Promise<Departure>;
+  // The costs of a departure: only the adapter of the service and the test data have them.
+  getCosts?(code: string): Promise<CostSheet>;
+  recordCost?(input: CostInput): Promise<CostLine>;
 }
