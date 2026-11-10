@@ -55,16 +55,21 @@ describe('the list of costs (AC-PT-11.1)', () => {
 
   it('U·the_panel_has_its_four_states: loading, error with retry, empty and data', async () => {
     let attempt = 0;
-    await open('SAL-021', gatewayWith(async () => (++attempt === 1 ? Promise.reject(new Error('network')) : sheet({ lines: [] }))));
+    let fail: (e: Error) => void = () => {};
+    const pending = new Promise<CostSheet>((_, reject) => (fail = reject));
+    await open('SAL-021', gatewayWith(() => (++attempt === 1 ? pending : Promise.resolve(sheet({ lines: [] })))));
     const root = await panel();
     expect(within(root).getByRole('status')).toHaveTextContent('Cargando');
+    fail(new Error('network'));
     fireEvent.click(await within(root).findByRole('button', { name: 'Reintentar' }));
     expect(await within(root).findByText('Aún no hay costos registrados para esta salida.')).toBeInTheDocument();
   });
 
-  it('U·the_panel_is_not_offered_without_the_permission', async () => {
-    await open('SAL-021', gatewayWith(async () => sheet()), false);
+  it('U·the_panel_is_not_offered_without_the_permission_and_asks_nothing', async () => {
+    const read = vi.fn(async () => sheet());
+    await open('SAL-021', gatewayWith(read), false);
     expect(screen.queryByRole('heading', { name: 'Registro real de la ejecución' })).not.toBeInTheDocument();
+    expect(read).not.toHaveBeenCalled();
   });
 });
 
