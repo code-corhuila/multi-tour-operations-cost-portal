@@ -13,4 +13,10 @@ describe('parseMoney (RN-OPS-PT-20 to -26)', () => {
   it.each(['', '0', '-5', 'abc', '1,234'])('rejects "%s"', (text) => {
     expect(parseMoney(text)).toBeUndefined();
   });
+
+  it('U·an_amount_beyond_what_a_number_keeps_exactly_is_refused', () => {
+    expect(parseMoney('90071992547409920')).toBeUndefined();
+    expect(parseMoney('99999999999999999999')).toBeUndefined();
+    expect(parseMoney('1000000000000')).toBe(100000000000000);
+  });
 });
