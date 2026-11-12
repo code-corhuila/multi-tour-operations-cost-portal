@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { FieldError } from '../departures/model';
 import { TENANT_TIME_ZONE, toInstant } from '../departures/time';
 import type { Departure, RegularizationResult } from './gateway';
 import { failureText, type PanelProps } from './panelProps';
@@ -26,6 +27,7 @@ export function RegularizePanel({ departure, gateway, canManage, onChanged }: Pa
     const next: Errors = {};
     if (!result) next.result = 'Selecciona el resultado.';
     if (result === 'NOT_DONE' && !notDone.trim()) next.notDone = 'Ingresa la causal de la no realización.';
+    else if (result === 'NOT_DONE' && notDone.trim().length > 500) next.notDone = 'La causal no puede superar 500 caracteres.';
     if (result === 'EXECUTED' || result === 'INTERRUPTED') {
       if (!start) next.start = 'Ingresa la hora de inicio real.';
       if (!end) next.end = 'Ingresa la hora de finalización real.';
@@ -50,22 +52,27 @@ export function RegularizePanel({ departure, gateway, canManage, onChanged }: Pa
       interruption: interruption.trim(),
       notDoneCause: notDone.trim(),
     };
-    const ok = await submit(`${departure.code}|${JSON.stringify(input)}`, async (key) => {
+    // the key follows what is sent: a field that does not travel with this result never renews it
+    const sent = result === 'NOT_DONE' ? { code: input.code, result, notDoneCause: input.notDoneCause } : { ...input, notDoneCause: '' };
+    const ok = await submit(`${departure.code}|${JSON.stringify(sent)}`, async (key) => {
       updated = await gateway.registerRegularization({ ...input, key });
     });
     if (ok && updated) onChanged(updated);
   }
 
+  // The service judges the cause too: its 400 on it is told beside the field, in our words, and the data stay.
+  const refusedCause = failed && failure instanceof FieldError && failure.fields.some((f) => f.field === 'notCarriedOutCause');
+  const shown: Errors = { ...errors, ...(refusedCause && !errors.notDone ? { notDone: 'El servicio no aceptó la causal: debe tener de 1 a 500 caracteres.' } : {}) };
   const field = (id: keyof Errors, name: string) => ({
     id: `reg-${name}`,
     disabled: locked,
-    'aria-invalid': errors[id] ? true : undefined,
-    'aria-describedby': errors[id] ? `reg-${name}-error` : undefined,
+    'aria-invalid': shown[id] ? true : undefined,
+    'aria-describedby': shown[id] ? `reg-${name}-error` : undefined,
   });
   const error = (id: keyof Errors, name: string) =>
-    errors[id] && (
+    shown[id] && (
       <span id={`reg-${name}-error`} className="operator-form-feedback is-error">
-        {errors[id]}
+        {shown[id]}
       </span>
     );
   const times = result === 'EXECUTED' || result === 'INTERRUPTED';
@@ -86,7 +93,7 @@ export function RegularizePanel({ departure, gateway, canManage, onChanged }: Pa
             <option value="">Selecciona una opción</option>
             <option value="EXECUTED">Ejecutada y finalizada</option>
             <option value="INTERRUPTED">Interrumpida (termina Finalizada)</option>
-            {!gateway.connected && <option value="NOT_DONE">No realizada (queda Cancelada)</option>}
+            <option value="NOT_DONE">No realizada (queda Cancelada)</option>
           </select>
           {error('result', 'result')}
         </div>
@@ -121,7 +128,7 @@ export function RegularizePanel({ departure, gateway, canManage, onChanged }: Pa
         {result === 'NOT_DONE' && (
           <div className="operator-form-wide">
             <label htmlFor="reg-notdone">Causal de la no realización</label>
-            <textarea {...field('notDone', 'notdone')} value={notDone} onChange={(e) => setNotDone(e.target.value)} />
+            <textarea {...field('notDone', 'notdone')} maxLength={500} value={notDone} onChange={(e) => setNotDone(e.target.value)} />
             {error('notDone', 'notdone')}
           </div>
         )}
@@ -133,7 +140,7 @@ export function RegularizePanel({ departure, gateway, canManage, onChanged }: Pa
       </form>
       {failed && (
         <div role="alert">
-          <p className="operator-form-feedback is-error">{failureText(failure, 'la regularización')}</p>
+          <p className="operator-form-feedback is-error">{failureText(failure, 'la regularización', result !== 'NOT_DONE')}</p>
           <button type="button" className="operator-outline" disabled={locked} onClick={() => void send()}>
             Reintentar
           </button>
