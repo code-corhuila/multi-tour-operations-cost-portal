@@ -1,7 +1,8 @@
 import type { ApiClient } from '../../contract';
+import { Failed, Refused } from '../departures/model';
 import { readVehicles, translate } from '../departures/scheduling';
 import { TENANT_TIME_ZONE, fromInstant, toInstant } from '../departures/time';
-import type { CostLine, CostSheet, Departure, DepartureExecutionGateway, DepartureStatus, ReservationState, ServiceResult } from './gateway';
+import type { CancellationCause, CostLine, CostSheet, Departure, DepartureExecutionGateway, DepartureStatus, ReservationState, ServiceResult } from './gateway';
 
 // The adapter of the page of a departure to the operations-cost service (spec 008 plan D-02). Only what the service offers is
 // served: reading a departure, adding vehicles to it, recording its start and recording its end or interruption. What it does not offer yet is refused
@@ -21,6 +22,7 @@ interface DepartureAnswer {
   startAlert: boolean;
   transportRequired?: boolean;
   vehicles: { vehicleId: string; name: string }[];
+  cancellation?: { cancelledAt: string; cancelledBy?: string; cause: CancellationCause; reason?: string };
   // Present only when the service could read the reservations of the departure (contract 0.7.0).
   travelersServed?: number;
   reservations?: {
@@ -42,6 +44,13 @@ interface CostSheetAnswer {
   totalCents: number;
   travelersServed: number;
   baseCostCents?: number;
+}
+
+// What the saga cancel-departure answers; only what the page decides on (its workflow contract).
+interface SagaAnswer {
+  status: 'RUNNING' | 'COMPLETED' | 'COMPENSATED' | 'FAILED';
+  failedStep?: string;
+  reason?: string;
 }
 
 const wall = (instant?: string) => (instant ? fromInstant(instant, TENANT_TIME_ZONE) : undefined);
@@ -73,6 +82,16 @@ function asDeparture(d: DepartureAnswer): Departure {
     })),
     reservationsUnavailable: d.reservations === undefined,
     ...(d.travelersServed === undefined ? {} : { travelersServed: d.travelersServed }),
+    ...(d.cancellation
+      ? {
+          cancellation: {
+            at: fromInstant(d.cancellation.cancelledAt, TENANT_TIME_ZONE),
+            ...(d.cancellation.cancelledBy ? { by: d.cancellation.cancelledBy } : {}),
+            cause: d.cancellation.cause,
+            ...(d.cancellation.reason ? { reason: d.cancellation.reason } : {}),
+          },
+        }
+      : {}),
     novelties: [],
     history: [],
   };
@@ -152,9 +171,27 @@ export function createExecutionGateway(apiClient: ApiClient): DepartureExecution
         justification: justification.trim(),
       }));
     },
-    async registerRegularization({ code, result, startedAt, finishedAt, earlyStartMotive, interruption, key }) {
-      // The service cannot cancel a departure yet (HU-OPS-006): "not done" is never sent. The fields that do not apply are left out.
-      if (result === 'NOT_DONE') return notAvailable();
+    async cancelDeparture({ code, key }) {
+      // The saga may still be running when it answers: the departure is read again and says what it is now (spec 013 D-02). A saga that
+      // compensated or that failed before the departure was cancelled changed nothing, and it is told, not shown as done.
+      try {
+        const saga = await apiClient.request<SagaAnswer>('/api/v1/sagas/cancel-departure', {
+          method: 'POST',
+          headers: { 'Idempotency-Key': key },
+          body: { departureCode: code },
+        });
+        if (saga?.status === 'COMPENSATED') throw saga.reason === 'DEPARTURE_REFUSED' ? new Refused('INVALID_STATUS_TRANSITION') : new Failed();
+        if (saga?.status === 'FAILED' && saga.failedStep === 'CANCEL_DEPARTURE') throw new Failed();
+        return asDeparture(await apiClient.request<DepartureAnswer>(`${DEPARTURES}/${encodeURIComponent(code)}`));
+      } catch (error) {
+        throw error instanceof Refused || error instanceof Failed ? error : translate(error);
+      }
+    },
+    async registerRegularization({ code, result, startedAt, finishedAt, earlyStartMotive, interruption, notDoneCause, key }) {
+      // A departure that was not carried out sends its cause and no hours; the fields that do not apply are left out.
+      if (result === 'NOT_DONE') {
+        return record(`${DEPARTURES}/${encodeURIComponent(code)}/regularization`, key, () => ({ result: 'NOT_CARRIED_OUT', notCarriedOutCause: notDoneCause.trim() }));
+      }
       return record(`${DEPARTURES}/${encodeURIComponent(code)}/regularization`, key, () => ({
         result,
         actualStart: toInstant(startedAt, TENANT_TIME_ZONE),

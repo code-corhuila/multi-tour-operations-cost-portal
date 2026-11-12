@@ -82,10 +82,11 @@ describe('the connected gateway regularizes through the service', () => {
     });
   });
 
-  it('C·not_done_is_never_sent_because_the_service_does_not_cancel_yet', async () => {
+  it('C·not_done_is_sent_as_not_carried_out_with_its_cause_and_no_hours', async () => {
     const { client, calls } = fakeClient(answer());
-    await expect(createExecutionGateway(client).registerRegularization(input({ result: 'NOT_DONE', notDoneCause: 'Rain' }))).rejects.toThrow('NOT_AVAILABLE');
-    expect(calls).toHaveLength(0);
+    await createExecutionGateway(client).registerRegularization(input({ result: 'NOT_DONE', notDoneCause: 'Rain' }));
+    expect(calls[0].init).toMatchObject({ body: { result: 'NOT_CARRIED_OUT', notCarriedOutCause: 'Rain' } });
+    expect(JSON.stringify(calls[0].init)).not.toContain('actualStart');
   });
 
   it('C·the_regularization_panel_is_served', () => {
