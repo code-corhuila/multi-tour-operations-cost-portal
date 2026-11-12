@@ -342,6 +342,59 @@ describe('the connected execution gateway', () => {
     await expect(failing({ status: 503 }).getCosts!('SAL-031')).rejects.toBeInstanceOf(Unavailable);
   });
 
+  it('C·a_cancellation_is_asked_to_the_saga_with_its_key_and_the_departure_is_read_again', async () => {
+    const { client, calls } = fakeClient((call) => (call.path.startsWith('/api/v1/sagas') ? { sagaId: 's-1', status: 'RUNNING' } : departure({ status: 'SCHEDULED' })));
+    const read = await createExecutionGateway(client).cancelDeparture!({ code: 'SAL-031', key: 'cancel-key-1' });
+    expect(calls).toEqual([
+      { path: '/api/v1/sagas/cancel-departure', init: { method: 'POST', headers: { 'Idempotency-Key': 'cancel-key-1' }, body: { departureCode: 'SAL-031' } } },
+      { path: '/api/v1/operations-cost/departures/SAL-031', init: undefined },
+    ]);
+    expect(read.status).toBe('SCHEDULED');
+    expect(read.cancellation).toBeUndefined();
+  });
+
+  it('C·a_refused_cancellation_is_translated_by_its_status', async () => {
+    const cancel = { code: 'SAL-031', key: 'cancel-key-1' };
+    await expect(failing({ status: 422, code: 'INVALID_STATUS_TRANSITION' }).cancelDeparture!(cancel)).rejects.toBeInstanceOf(Refused);
+    await expect(failing({ status: 403 }).cancelDeparture!(cancel)).rejects.toBeInstanceOf(Forbidden);
+    await expect(failing({ status: 503 }).cancelDeparture!(cancel)).rejects.toBeInstanceOf(Unavailable);
+    await expect(failing({ status: 400 }).cancelDeparture!(cancel)).rejects.toBeInstanceOf(FieldError);
+  });
+
+  it('C·a_cancelled_departure_carries_when_by_whom_and_why_and_the_time_is_the_wall_clock_of_the_tenant', async () => {
+    const { client } = fakeClient(() =>
+      departure({
+        status: 'CANCELLED',
+        actualStart: undefined,
+        cancellation: { cancelledAt: '2026-12-01T15:30:00Z', cancelledBy: 'acc-1', cause: 'NOT_CARRIED_OUT', reason: 'Nobody came' },
+      }),
+    );
+    const read = await createExecutionGateway(client).getDeparture('SAL-031');
+    expect(read?.cancellation).toEqual({ at: '2026-12-01T10:30', by: 'acc-1', cause: 'NOT_CARRIED_OUT', reason: 'Nobody came' });
+    const system = await createExecutionGateway(
+      fakeClient(() => departure({ status: 'CANCELLED', cancellation: { cancelledAt: '2026-12-01T15:30:00Z', cause: 'NOT_ATTRIBUTABLE_TO_CUSTOMER' } })).client,
+    ).getDeparture('SAL-031');
+    expect(system?.cancellation).toEqual({ at: '2026-12-01T10:30', cause: 'NOT_ATTRIBUTABLE_TO_CUSTOMER' });
+  });
+
+  it('C·not_performed_is_sent_as_NOT_CARRIED_OUT_with_its_cause_and_no_hours', async () => {
+    const { client, calls } = fakeClient(() => departure({ status: 'CANCELLED', reservations: [] }));
+    await createExecutionGateway(client).registerRegularization({
+      code: 'SAL-031',
+      result: 'NOT_DONE',
+      startedAt: '2026-12-01T08:00',
+      finishedAt: '2026-12-01T16:00',
+      earlyStartMotive: 'early',
+      interruption: 'rain',
+      notDoneCause: ' Nobody came ',
+      key: 'reg-key-1',
+    });
+    expect(calls[0]).toEqual({
+      path: '/api/v1/operations-cost/departures/SAL-031/regularization',
+      init: { method: 'POST', headers: { 'Idempotency-Key': 'reg-key-1' }, body: { result: 'NOT_CARRIED_OUT', notCarriedOutCause: 'Nobody came' } },
+    });
+  });
+
   it('U·it_says_it_talks_to_the_service_and_offers_the_departure_the_start_the_finish_and_the_regularization', () => {
     const gateway = createExecutionGateway(fakeClient(() => departure()).client);
     expect(gateway.connected).toBe(true);
@@ -352,7 +405,6 @@ describe('the connected execution gateway', () => {
     const { client, calls } = fakeClient(() => departure());
     const gateway = createExecutionGateway(client);
     await expect(gateway.registerNovelty({ code: 'SAL-031', reservationId: 'r', detail: 'd', emergency: false, key: 'k' })).rejects.toThrow('NOT_AVAILABLE');
-    await expect(gateway.registerRegularization({ code: 'SAL-031', result: 'NOT_DONE', startedAt: '', finishedAt: '', earlyStartMotive: '', interruption: '', notDoneCause: 'Rain', key: 'k' })).rejects.toThrow('NOT_AVAILABLE');
     expect(calls).toHaveLength(0);
   });
 });
