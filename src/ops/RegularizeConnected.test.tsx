@@ -125,10 +125,10 @@ const type = (p: HTMLElement, label: string, value: string) => fireEvent.change(
 const send = (p: HTMLElement) => fireEvent.click(within(p).getByRole('button', { name: 'Registrar regularización' }));
 
 describe('the panel over the service', () => {
-  it('U·not_done_is_not_offered_when_the_service_cannot_cancel', async () => {
+  it('U·not_done_is_offered_because_the_service_cancels', async () => {
     open(connected(async () => marked()));
     const p = await panel();
-    expect(within(p).queryByRole('option', { name: /No realizada/ })).not.toBeInTheDocument();
+    expect(within(p).getByRole('option', { name: /No realizada/ })).toBeInTheDocument();
     expect(within(p).getByRole('option', { name: /Ejecutada y finalizada/ })).toBeInTheDocument();
     expect(within(p).getByRole('option', { name: /Interrumpida/ })).toBeInTheDocument();
   });
