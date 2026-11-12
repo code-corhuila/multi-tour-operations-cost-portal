@@ -1,3 +1,4 @@
+import { TENANT_TIME_ZONE, fromInstant } from '../departures/time';
 import type { CostLine, CostSheet, Departure, DepartureExecutionGateway, HistoryEntry, ReservationService } from './gateway';
 
 // Test data, labelled as such on the page: one departure per status, fictitious (RN-OPS-PT-42).
@@ -212,11 +213,11 @@ export function createDepartureFixture(): DepartureExecutionGateway {
         key,
         () => {
           const d = find(code);
+          if (!justification.trim() || justification.length > 500) throw new Error('VALIDATION_ERROR');
           if (d.status !== 'IN_EXECUTION') throw new Error('INVALID_STATUS_TRANSITION');
-          if (!justification.trim()) throw new Error('VALIDATION_ERROR');
           const r = d.reservations.find((x) => x.reservationId === reservationId);
           if (!r || r.state !== 'IN_EXECUTION' || r.extraordinaryCancellation) throw new Error('BUSINESS_RULE_VIOLATION');
-          const at = new Date().toISOString().slice(0, 16);
+          const at = fromInstant(new Date().toISOString(), TENANT_TIME_ZONE);
           r.extraordinaryCancellation = { justification: justification.trim(), recordedBy: who, recordedAt: at };
           d.history.push(log(at, 'Cancelación extraordinaria', `${r.customer}: ${justification.trim()}`));
         },

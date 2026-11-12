@@ -31,6 +31,13 @@ describe('the extraordinary cancellation on the test data', () => {
     await expect(
       gateway.recordExtraordinaryCancellation({ code: 'SAL-018', reservationId: 'RES-1001', justification: 'x', key: 'cancel-key-1' }),
     ).rejects.toThrow('INVALID_STATUS_TRANSITION');
+    // the body is judged before the state, as the service does
+    await expect(
+      gateway.recordExtraordinaryCancellation({ code: 'SAL-018', reservationId: 'RES-1001', justification: '', key: 'cancel-key-0' }),
+    ).rejects.toThrow('VALIDATION_ERROR');
+    await expect(
+      gateway.recordExtraordinaryCancellation({ code: 'SAL-021', reservationId: 'RES-1002', justification: 'j'.repeat(501), key: 'cancel-key-5' }),
+    ).rejects.toThrow('VALIDATION_ERROR');
     await expect(
       gateway.recordExtraordinaryCancellation({ code: 'SAL-021', reservationId: 'RES-9999', justification: 'x', key: 'cancel-key-2' }),
     ).rejects.toThrow('BUSINESS_RULE_VIOLATION');
