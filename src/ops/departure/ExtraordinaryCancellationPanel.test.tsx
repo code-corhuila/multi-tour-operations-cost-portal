@@ -219,4 +219,20 @@ describe('the extraordinary cancellation in the panel of the reservations', () =
     fireEvent.click(within(panel).getByRole('button', { name: 'Continuar' }));
     expect(await within(panel).findByRole('alert')).toHaveTextContent('Escribe la justificación de la emergencia (1 a 500 caracteres).');
   });
+
+  it('U·the_form_is_laid_out_like_the_other_forms_of_the_panel_with_each_part_on_its_own_line', async () => {
+    setup('SAL-021');
+    const panel = await panelOf();
+    fireEvent.click(within(panel).getAllByRole('button', { name: ACTION })[0]);
+    const field = within(panel).getByLabelText(JUSTIFICATION);
+    // seen on dev (2026-11-12): without a grid the label, the field, the count and the error shared one line
+    expect(field.closest('form')).toHaveClass('operator-form-grid');
+    expect(field.parentElement).toHaveClass('operator-form-wide');
+    expect(field.parentElement).toContainElement(within(panel).getByText('0/500'));
+    expect(within(panel).getByText('0/500').tagName).toBe('P');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Continuar' }));
+    const error = await within(panel).findByRole('alert');
+    expect(error.tagName).toBe('P');
+    expect(field.parentElement).toContainElement(error);
+  });
 });
