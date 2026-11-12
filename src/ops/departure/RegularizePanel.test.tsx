@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { DepartureExecutionPage } from './DepartureExecutionPage';
+import { FieldError, Refused } from '../departures/model';
 import { createDepartureFixture } from './fixture';
 
 const setup = () => {
@@ -81,5 +82,74 @@ describe('regularization of a departure (RN-OPS-PT-38)', () => {
     send(p);
     await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
     expect(spy.mock.calls[0][0]).toMatchObject({ result: 'NOT_DONE', notDoneCause: 'c'.repeat(500) });
+  });
+
+  const connectedWith = (reject: (call: number) => unknown) => {
+    const gateway = { ...createDepartureFixture(), connected: true };
+    const keys: string[] = [];
+    gateway.registerRegularization = async (input) => {
+      keys.push(input.key);
+      throw reject(keys.length);
+    };
+    render(<DepartureExecutionPage gateway={gateway} code="SAL-014" canManage onBack={vi.fn()} />);
+    return keys;
+  };
+
+  it('U·a_whitespace_only_cause_is_refused_beside_the_field_and_the_trimmed_text_is_what_is_sent', async () => {
+    const gateway = { ...createDepartureFixture(), connected: true };
+    const spy = vi.spyOn(gateway, 'registerRegularization');
+    render(<DepartureExecutionPage gateway={gateway} code="SAL-014" canManage onBack={vi.fn()} />);
+    const p = await panel();
+    choose(p, 'NOT_DONE');
+    fireEvent.change(within(p).getByLabelText('Causal de la no realización'), { target: { value: '   ' } });
+    send(p);
+    expect(await within(p).findByText('Ingresa la causal de la no realización.')).toBeInTheDocument();
+    expect(within(p).getByLabelText('Causal de la no realización')).toHaveAttribute('aria-describedby', 'reg-notdone-error');
+    expect(spy).not.toHaveBeenCalled();
+    fireEvent.change(within(p).getByLabelText('Causal de la no realización'), { target: { value: '  Clima adverso  ' } });
+    send(p);
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+    expect(spy.mock.calls[0][0]).toMatchObject({ notDoneCause: 'Clima adverso' });
+  });
+
+  it('U·a_400_of_the_service_on_the_cause_is_shown_beside_the_field', async () => {
+    connectedWith(() => new FieldError([{ field: 'notCarriedOutCause', message: 'too long' }]));
+    const p = await panel();
+    choose(p, 'NOT_DONE');
+    fireEvent.change(within(p).getByLabelText('Causal de la no realización'), { target: { value: 'Clima' } });
+    send(p);
+    expect(await within(p).findByText('El servicio no aceptó la causal: debe tener de 1 a 500 caracteres.')).toBeInTheDocument();
+    expect(within(p).getByLabelText('Causal de la no realización')).toHaveAttribute('aria-invalid', 'true');
+    expect(within(p).getByLabelText('Causal de la no realización')).toHaveValue('Clima');
+  });
+
+  it('U·a_422_on_not_done_does_not_talk_about_hours', async () => {
+    connectedWith(() => new Refused('BUSINESS_RULE_VIOLATION'));
+    const p = await panel();
+    choose(p, 'NOT_DONE');
+    fireEvent.change(within(p).getByLabelText('Causal de la no realización'), { target: { value: 'Clima' } });
+    send(p);
+    const alert = await within(p).findByRole('alert');
+    expect(alert).not.toHaveTextContent('hora');
+    expect(alert).toHaveTextContent('Tus datos siguen aquí.');
+  });
+
+  it('U·a_retry_of_the_same_not_done_keeps_the_key_even_if_a_field_that_is_not_sent_changed', async () => {
+    const keys = connectedWith(() => new Error('network'));
+    const p = await panel();
+    choose(p, 'NOT_DONE');
+    fireEvent.change(within(p).getByLabelText('Causal de la no realización'), { target: { value: 'Clima' } });
+    send(p);
+    await waitFor(() => expect(keys).toHaveLength(1));
+    choose(p, 'EXECUTED');
+    fireEvent.change(within(p).getByLabelText('Hora de inicio real'), { target: { value: '2026-10-10T09:00' } });
+    choose(p, 'NOT_DONE');
+    send(p);
+    await waitFor(() => expect(keys).toHaveLength(2));
+    expect(keys[1]).toBe(keys[0]);
+    fireEvent.change(within(p).getByLabelText('Causal de la no realización'), { target: { value: 'Otra causal' } });
+    send(p);
+    await waitFor(() => expect(keys).toHaveLength(3));
+    expect(keys[2]).not.toBe(keys[0]);
   });
 });
