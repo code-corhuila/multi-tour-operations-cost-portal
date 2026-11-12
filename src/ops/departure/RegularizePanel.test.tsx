@@ -64,4 +64,22 @@ describe('regularization of a departure (RN-OPS-PT-38)', () => {
     expect(spy).toHaveBeenCalledTimes(1);
     expect(within((await screen.findByRole('heading', { name: 'SAL-014' })).closest('section') as HTMLElement).getByText('Finalizada')).toBeInTheDocument();
   });
+
+  it('U·not_done_is_offered_over_the_service_too_and_its_cause_of_1_to_500_characters_is_checked_beside_the_field', async () => {
+    const gateway = { ...createDepartureFixture(), connected: true };
+    const spy = vi.spyOn(gateway, 'registerRegularization');
+    render(<DepartureExecutionPage gateway={gateway} code="SAL-014" canManage onBack={vi.fn()} />);
+    const p = await panel();
+    expect(within(p).getByRole('option', { name: /No realizada/ })).toBeInTheDocument();
+    choose(p, 'NOT_DONE');
+    fireEvent.change(within(p).getByLabelText('Causal de la no realización'), { target: { value: 'c'.repeat(501) } });
+    send(p);
+    expect(await within(p).findByText('La causal no puede superar 500 caracteres.')).toBeInTheDocument();
+    expect(within(p).getByLabelText('Causal de la no realización')).toHaveAttribute('aria-invalid', 'true');
+    expect(spy).not.toHaveBeenCalled();
+    fireEvent.change(within(p).getByLabelText('Causal de la no realización'), { target: { value: 'c'.repeat(500) } });
+    send(p);
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+    expect(spy.mock.calls[0][0]).toMatchObject({ result: 'NOT_DONE', notDoneCause: 'c'.repeat(500) });
+  });
 });
