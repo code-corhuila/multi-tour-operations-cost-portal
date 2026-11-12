@@ -20,12 +20,12 @@ const clickStart = () => fireEvent.click(screen.getByRole('button', { name: 'Reg
 // over the test data of the departure gateway.
 describe('panels of a departure (RN-OPS-PT-31)', () => {
   it('U·panels_follow_the_status_of_the_departure: each status shows only its panels', () => {
-    expect(panelsFor('SCHEDULED')).toEqual(['departure', 'vehicles', 'start', 'reservations', 'costs', 'history']);
+    expect(panelsFor('SCHEDULED')).toEqual(['departure', 'vehicles', 'start', 'cancel', 'reservations', 'costs', 'history']);
     expect(panelsFor('IN_EXECUTION')).toEqual(['departure', 'reservations', 'novelties', 'finish', 'costs', 'history']);
-    expect(panelsFor('SCHEDULED', true)).toEqual(['departure', 'regularize', 'reservations', 'costs', 'history']);
+    expect(panelsFor('SCHEDULED', true)).toEqual(['departure', 'regularize', 'cancel', 'reservations', 'costs', 'history']);
     expect(panelsFor('IN_EXECUTION', true)).toEqual(['departure', 'reservations', 'novelties', 'finish', 'costs', 'history']);
     expect(panelsFor('FINISHED')).toEqual(['departure', 'reservations', 'novelties', 'costs', 'history']);
-    expect(panelsFor('CANCELLED')).toEqual(['departure', 'reservations', 'costs', 'history']);
+    expect(panelsFor('CANCELLED')).toEqual(['departure', 'cancellation', 'reservations', 'costs', 'history']);
   });
 });
 

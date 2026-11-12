@@ -100,7 +100,7 @@ function asDeparture(d: DepartureAnswer): Departure {
 export function createExecutionGateway(apiClient: ApiClient): DepartureExecutionGateway {
   return {
     connected: true,
-    panels: ['departure', 'vehicles', 'start', 'reservations', 'finish', 'regularize', 'costs'],
+    panels: ['departure', 'vehicles', 'start', 'reservations', 'finish', 'regularize', 'costs', 'cancel', 'cancellation'],
     listVehicles: () => readVehicles(apiClient),
     async addVehicles({ code, vehicleIds, key }) {
       return record(`${DEPARTURES}/${encodeURIComponent(code)}/vehicles`, key, () => ({ vehicleIds }));
