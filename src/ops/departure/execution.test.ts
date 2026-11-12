@@ -343,7 +343,7 @@ describe('the connected execution gateway', () => {
   });
 
   it('C·a_cancellation_is_asked_to_the_saga_with_its_key_and_the_departure_is_read_again', async () => {
-    const { client, calls } = fakeClient((call) => (call.path.startsWith('/api/v1/sagas') ? { sagaId: 's-1', status: 'RUNNING' } : departure({ status: 'SCHEDULED' })));
+    const { client, calls } = fakeClient((call) => (call.path.startsWith('/api/v1/sagas') ? { id: 's-1', status: 'RUNNING', departureCode: 'SAL-031' } : departure({ status: 'SCHEDULED' })));
     const read = await createExecutionGateway(client).cancelDeparture!({ code: 'SAL-031', key: 'cancel-key-1' });
     expect(calls).toEqual([
       { path: '/api/v1/sagas/cancel-departure', init: { method: 'POST', headers: { 'Idempotency-Key': 'cancel-key-1' }, body: { departureCode: 'SAL-031' } } },
@@ -353,9 +353,22 @@ describe('the connected execution gateway', () => {
     expect(read.cancellation).toBeUndefined();
   });
 
+  it('C·the_answer_of_the_saga_is_told_a_departure_it_refused_is_refused_and_a_failure_before_the_cancellation_is_a_failure', async () => {
+    const cancel = { code: 'SAL-031', key: 'cancel-key-1' };
+    const saga = (answer: Record<string, unknown>) => createExecutionGateway(fakeClient((call) => (call.path.startsWith('/api/v1/sagas') ? answer : departure({ status: 'SCHEDULED' }))).client);
+    await expect(saga({ id: 's-1', status: 'COMPENSATED', reason: 'DEPARTURE_REFUSED', failedStep: 'CANCEL_DEPARTURE' }).cancelDeparture!(cancel)).rejects.toMatchObject({
+      name: 'Refused',
+      code: 'INVALID_STATUS_TRANSITION',
+    });
+    await expect(saga({ id: 's-1', status: 'COMPENSATED', reason: 'PARTICIPANT_UNAVAILABLE' }).cancelDeparture!(cancel)).rejects.toBeInstanceOf(Failed);
+    await expect(saga({ id: 's-1', status: 'FAILED', failedStep: 'CANCEL_DEPARTURE' }).cancelDeparture!(cancel)).rejects.toBeInstanceOf(Failed);
+    // the departure is cancelled and some reservations wait for a person: the page shows the departure as it is
+    await expect(saga({ id: 's-1', status: 'FAILED', failedStep: 'OPEN_EPISODES', reservationsLeft: ['r-1'] }).cancelDeparture!(cancel)).resolves.toMatchObject({ code: 'SAL-031' });
+    await expect(saga({ id: 's-1', status: 'COMPLETED' }).cancelDeparture!(cancel)).resolves.toMatchObject({ code: 'SAL-031' });
+  });
+
   it('C·a_refused_cancellation_is_translated_by_its_status', async () => {
     const cancel = { code: 'SAL-031', key: 'cancel-key-1' };
-    await expect(failing({ status: 422, code: 'INVALID_STATUS_TRANSITION' }).cancelDeparture!(cancel)).rejects.toBeInstanceOf(Refused);
     await expect(failing({ status: 403 }).cancelDeparture!(cancel)).rejects.toBeInstanceOf(Forbidden);
     await expect(failing({ status: 503 }).cancelDeparture!(cancel)).rejects.toBeInstanceOf(Unavailable);
     await expect(failing({ status: 400 }).cancelDeparture!(cancel)).rejects.toBeInstanceOf(FieldError);

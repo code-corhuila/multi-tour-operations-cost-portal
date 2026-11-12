@@ -15,6 +15,13 @@ describe('the cancellation of a departure on the test data', () => {
     expect((await gateway.getDeparture('SAL-018'))?.status).toBe('CANCELLED');
   });
 
+  it('U·the_record_of_a_cancellation_is_a_copy_nobody_can_change_from_outside', async () => {
+    const gateway = createDepartureFixture();
+    const answered = await gateway.cancelDeparture!({ code: 'SAL-018', key: 'cancel-key-1' });
+    answered.cancellation!.reason = 'tampered';
+    expect((await gateway.getDeparture('SAL-018'))?.cancellation?.reason).toBeUndefined();
+  });
+
   it('U·a_departure_that_is_not_scheduled_is_refused_and_a_cancelled_one_stays_cancelled', async () => {
     const gateway = createDepartureFixture();
     await expect(gateway.cancelDeparture!({ code: 'SAL-021', key: 'cancel-key-1' })).rejects.toThrow('INVALID_STATUS_TRANSITION');
