@@ -207,6 +207,21 @@ export function createDepartureFixture(): DepartureExecutionGateway {
         },
         code,
       ),
+    recordExtraordinaryCancellation: async ({ code, reservationId, justification, key }) =>
+      once(
+        key,
+        () => {
+          const d = find(code);
+          if (d.status !== 'IN_EXECUTION') throw new Error('INVALID_STATUS_TRANSITION');
+          if (!justification.trim()) throw new Error('VALIDATION_ERROR');
+          const r = d.reservations.find((x) => x.reservationId === reservationId);
+          if (!r || r.state !== 'IN_EXECUTION' || r.extraordinaryCancellation) throw new Error('BUSINESS_RULE_VIOLATION');
+          const at = new Date().toISOString().slice(0, 16);
+          r.extraordinaryCancellation = { justification: justification.trim(), recordedBy: who, recordedAt: at };
+          d.history.push(log(at, 'Cancelación extraordinaria', `${r.customer}: ${justification.trim()}`));
+        },
+        code,
+      ),
     registerNovelty: async ({ code, reservationId, detail, emergency, affected, key }) =>
       once(
         key,

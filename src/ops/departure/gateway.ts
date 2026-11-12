@@ -28,6 +28,14 @@ export interface ReservationService {
   travelersServed?: number;
   noShow?: boolean;
   cause?: string;
+  // Since contract 0.10.0 (HU-OPS-005): why, by whom and when the reservation was cancelled extraordinarily; the time is the wall clock of the tenant.
+  extraordinaryCancellation?: ExtraordinaryCancellation;
+}
+
+export interface ExtraordinaryCancellation {
+  justification: string;
+  recordedBy: string;
+  recordedAt: string;
 }
 
 export interface Novelty {
@@ -78,6 +86,13 @@ export interface StartInput {
 export interface ServicesInput {
   code: string;
   entries: { reservationId: string; result: ServiceResult; travelersServed: number; noShow: boolean; cause: string }[];
+  key: string;
+}
+
+export interface ExtraordinaryCancellationInput {
+  code: string;
+  reservationId: string;
+  justification: string;
   key: string;
 }
 
@@ -161,6 +176,8 @@ export interface DepartureExecutionGateway {
   registerStart(input: StartInput): Promise<Departure>;
   registerServices(input: ServicesInput): Promise<Departure>;
   registerNovelty(input: NoveltyInput): Promise<Departure>;
+  // HU-OPS-005: the answer is the departure as it is now, with the cancellation next to its reservation.
+  recordExtraordinaryCancellation(input: ExtraordinaryCancellationInput): Promise<Departure>;
   registerFinish(input: FinishInput): Promise<Departure>;
   registerRegularization(input: RegularizationInput): Promise<Departure>;
   // Only the adapter of the service has them: the vehicles of the tenant, and adding some to a scheduled departure (HU-OPS-002).
