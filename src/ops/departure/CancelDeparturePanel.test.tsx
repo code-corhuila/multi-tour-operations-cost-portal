@@ -38,7 +38,8 @@ describe('the panel Cancelar salida', () => {
 
   it('U·the_confirmation_names_the_departure_and_says_it_cannot_be_undone_and_nothing_is_sent_before_it', async () => {
     const gateway = createDepartureFixture();
-    const spy = vi.spyOn(gateway, 'cancelDeparture');
+    const spy = vi.fn(gateway.cancelDeparture!);
+    gateway.cancelDeparture = spy;
     open('SAL-018', gateway);
     await choose();
     const p = await panel();
@@ -53,7 +54,8 @@ describe('the panel Cancelar salida', () => {
 
   it('U·a_confirmed_cancellation_goes_to_the_saga_with_a_key_and_the_page_shows_the_departure_cancelled_with_its_record', async () => {
     const gateway = createDepartureFixture();
-    const spy = vi.spyOn(gateway, 'cancelDeparture');
+    const spy = vi.fn(gateway.cancelDeparture!);
+    gateway.cancelDeparture = spy;
     open('SAL-018', gateway);
     await choose();
     confirm(await panel());
@@ -103,6 +105,42 @@ describe('the panel Cancelar salida', () => {
     expect(keys[1]).toBe(keys[0]);
     expect(keys[2]).toBe(keys[0]);
     expect(await within(p).findByRole('alert')).toHaveTextContent(/Solo el Administrador/);
+  });
+});
+
+describe('the panel Cancelar salida, after the review', () => {
+  it('U·while_the_request_is_in_course_the_action_is_not_offered_again_so_no_second_saga_starts', async () => {
+    const gateway = createDepartureFixture();
+    const still = (await gateway.getDeparture('SAL-018')) as Departure;
+    gateway.cancelDeparture = async () => still;
+    open('SAL-018', gateway);
+    await choose();
+    confirm(await panel());
+    const p = await panel();
+    expect(await within(p).findByText(/La cancelación está en curso/)).toBeInTheDocument();
+    expect(within(p).queryByRole('button', { name: 'Cancelar salida' })).not.toBeInTheDocument();
+  });
+
+  it('U·the_focus_goes_back_to_the_action_when_the_person_leaves_the_confirmation', async () => {
+    open('SAL-018');
+    await choose();
+    const p = await panel();
+    fireEvent.click(within(p).getByRole('button', { name: 'Volver' }));
+    await waitFor(() => expect(within(p).getByRole('button', { name: 'Cancelar salida' })).toHaveFocus());
+  });
+
+  it('U·a_service_that_did_not_answer_does_not_say_that_the_cancellation_was_not_asked', async () => {
+    const gateway = createDepartureFixture();
+    gateway.cancelDeparture = async () => {
+      throw new Unavailable();
+    };
+    open('SAL-018', gateway);
+    await choose();
+    const p = await panel();
+    confirm(p);
+    const alert = await within(p).findByRole('alert');
+    expect(alert).toHaveTextContent(/No pudimos confirmar/);
+    expect(alert).not.toHaveTextContent(/no se pidió/);
   });
 });
 
