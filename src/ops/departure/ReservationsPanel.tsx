@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { Departure, ReservationService, ReservationState, ServiceResult, ServicesInput } from './gateway';
+import { ExtraordinaryCancellationForm } from './ExtraordinaryCancellationForm';
 import type { PanelProps } from './panelProps';
+import { showTime } from './panelProps';
 import { useRegistration } from './useRegistration';
 
 const STATE: Record<ReservationState, { label: string; className: string }> = {
@@ -36,6 +38,8 @@ export function ReservationsPanel({ departure, gateway, canManage, onChanged }: 
   const [saved, setSaved] = useState(false);
   const [rereading, setRereading] = useState(false);
   const [rereadFailed, setRereadFailed] = useState(false);
+  // the reservation whose extraordinary cancellation form is open (spec 012)
+  const [cancelling, setCancelling] = useState<string>();
   const { sending, failed, submit } = useRegistration();
   const editable = departure.status === 'IN_EXECUTION';
   const locked = !canManage || sending;
@@ -182,7 +186,12 @@ export function ReservationsPanel({ departure, gateway, canManage, onChanged }: 
                       checked={row.noShow}
                       disabled={locked}
                       onChange={(e) =>
-                        edit(r, e.target.checked ? { noShow: true, result: 'NOT_DELIVERED', served: '0' } : { noShow: false, result: 'DELIVERED', served: String(r.travelers) })
+                        edit(
+                          r,
+                          e.target.checked
+                            ? { noShow: true, result: 'NOT_DELIVERED', served: '0' }
+                            : { noShow: false, result: 'DELIVERED', served: String(r.travelers) },
+                        )
                       }
                     />{' '}
                     No se presentó sin aviso oportuno
@@ -191,6 +200,34 @@ export function ReservationsPanel({ departure, gateway, canManage, onChanged }: 
                 </div>
               </div>
             )}
+            {r.extraordinaryCancellation && (
+              <div role="group" aria-label={`Cancelación extraordinaria de ${r.customer}`}>
+                <p className="operator-copy">
+                  {`Cancelación extraordinaria: ${r.extraordinaryCancellation.justification}`}
+                  {` · ${showTime(r.extraordinaryCancellation.recordedAt)} · cuenta ${r.extraordinaryCancellation.recordedBy}`}
+                </p>
+                <p className="operator-copy">La decisión de reprogramar o reembolsar queda pendiente.</p>
+              </div>
+            )}
+            {canManage &&
+              rowEditable &&
+              !r.extraordinaryCancellation &&
+              (cancelling === r.reservationId ? (
+                <ExtraordinaryCancellationForm
+                  code={departure.code}
+                  reservation={r}
+                  record={(input) => gateway.recordExtraordinaryCancellation(input)}
+                  onDone={(updated) => {
+                    setCancelling(undefined);
+                    onChanged(updated);
+                  }}
+                  onClose={() => setCancelling(undefined)}
+                />
+              ) : (
+                <button type="button" className="operator-outline" disabled={sending} onClick={() => setCancelling(r.reservationId)}>
+                  Cancelación extraordinaria
+                </button>
+              ))}
             {r.result && (
               <p className="operator-copy">
                 {`Reservado: ${r.travelers} · Ejecutado: ${executed}`}
