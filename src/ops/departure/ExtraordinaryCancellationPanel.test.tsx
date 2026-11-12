@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { Refused } from '../departures/model';
+import { Refused, Unavailable } from '../departures/model';
 import { DepartureExecutionPage } from './DepartureExecutionPage';
 import { createDepartureFixture } from './fixture';
 import type { DepartureExecutionGateway } from './gateway';
@@ -158,5 +158,65 @@ describe('the extraordinary cancellation in the panel of the reservations', () =
     fireEvent.click(await within(panel).findByRole('button', { name: 'Confirmar cancelación' }));
     await waitFor(() => expect(within(panel).getByRole('button', { name: 'Confirmar cancelación' })).toBeDisabled());
     release();
+  });
+
+  it('U·a_reservation_cancelled_extraordinarily_is_not_said_to_be_cancelled_for_a_missing_payment', async () => {
+    const gateway = createDepartureFixture();
+    const real = await gateway.getDeparture('SAL-021');
+    real!.reservations[0] = {
+      ...real!.reservations[0],
+      state: 'CANCELLED',
+      extraordinaryCancellation: { justification: 'Emergencia médica', recordedBy: 'acc-1', recordedAt: '2026-10-14T09:30' },
+    };
+    vi.spyOn(gateway, 'getDeparture').mockResolvedValue(real);
+    setup('SAL-021', gateway);
+    const panel = await panelOf();
+    expect(within(panel).getByText('Cancelada por emergencia (cancelación extraordinaria)')).toBeInTheDocument();
+    expect(within(panel).queryByText('Cancelada por incumplimiento de pago')).toBeNull();
+  });
+
+  it('U·the_focus_goes_to_the_confirmation_back_to_the_field_and_back_to_the_action_that_opened_the_form', async () => {
+    setup('SAL-021');
+    const panel = await panelOf();
+    const open = within(panel).getAllByRole('button', { name: ACTION })[0];
+    fireEvent.click(open);
+    fireEvent.change(within(panel).getByLabelText(JUSTIFICATION), { target: { value: 'Emergencia médica' } });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Continuar' }));
+    await waitFor(() => expect(document.activeElement).toBe(within(panel).getByText(/Vas a cancelar la reserva de/)));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Volver' }));
+    await waitFor(() => expect(document.activeElement).toBe(within(panel).getByLabelText(JUSTIFICATION)));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Cancelar' }));
+    await waitFor(() => expect(document.activeElement).toBe(within(panel).getAllByRole('button', { name: ACTION })[0]));
+  });
+
+  it('U·each_failure_says_what_it_is_and_a_stale_one_is_not_shown_again', async () => {
+    const gateway = setup('SAL-021');
+    const spy = vi.spyOn(gateway, 'recordExtraordinaryCancellation');
+    const panel = await panelOf();
+    fireEvent.click(within(panel).getAllByRole('button', { name: ACTION })[0]);
+    fireEvent.change(within(panel).getByLabelText(JUSTIFICATION), { target: { value: 'Emergencia médica' } });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Continuar' }));
+    const cases: [unknown, RegExp][] = [
+      [new Refused('INVALID_STATUS_TRANSITION'), /la salida ya no está en ejecución/],
+      [new Unavailable(), /no respondió/],
+      [new Refused('SOMETHING_ELSE'), /No pudimos registrar la cancelación extraordinaria/],
+    ];
+    for (const [error, text] of cases) {
+      spy.mockRejectedValueOnce(error);
+      fireEvent.click(await within(panel).findByRole('button', { name: 'Confirmar cancelación' }));
+      expect(await within(panel).findByText(text)).toBeInTheDocument();
+    }
+    fireEvent.click(within(panel).getByRole('button', { name: 'Volver' }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Continuar' }));
+    await within(panel).findByRole('button', { name: 'Confirmar cancelación' });
+    expect(within(panel).queryByRole('alert')).toBeNull();
+  });
+
+  it('U·the_validation_error_is_announced', async () => {
+    setup('SAL-021');
+    const panel = await panelOf();
+    fireEvent.click(within(panel).getAllByRole('button', { name: ACTION })[0]);
+    fireEvent.click(within(panel).getByRole('button', { name: 'Continuar' }));
+    expect(await within(panel).findByRole('alert')).toHaveTextContent('Escribe la justificación de la emergencia (1 a 500 caracteres).');
   });
 });
