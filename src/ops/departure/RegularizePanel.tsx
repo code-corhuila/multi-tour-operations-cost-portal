@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { FieldError } from '../departures/model';
 import { TENANT_TIME_ZONE, toInstant } from '../departures/time';
 import type { Departure, RegularizationResult } from './gateway';
 import { failureText, type PanelProps } from './panelProps';
@@ -51,22 +52,27 @@ export function RegularizePanel({ departure, gateway, canManage, onChanged }: Pa
       interruption: interruption.trim(),
       notDoneCause: notDone.trim(),
     };
-    const ok = await submit(`${departure.code}|${JSON.stringify(input)}`, async (key) => {
+    // the key follows what is sent: a field that does not travel with this result never renews it
+    const sent = result === 'NOT_DONE' ? { code: input.code, result, notDoneCause: input.notDoneCause } : { ...input, notDoneCause: '' };
+    const ok = await submit(`${departure.code}|${JSON.stringify(sent)}`, async (key) => {
       updated = await gateway.registerRegularization({ ...input, key });
     });
     if (ok && updated) onChanged(updated);
   }
 
+  // The service judges the cause too: its 400 on it is told beside the field, in our words, and the data stay.
+  const refusedCause = failed && failure instanceof FieldError && failure.fields.some((f) => f.field === 'notCarriedOutCause');
+  const shown: Errors = { ...errors, ...(refusedCause && !errors.notDone ? { notDone: 'El servicio no aceptó la causal: debe tener de 1 a 500 caracteres.' } : {}) };
   const field = (id: keyof Errors, name: string) => ({
     id: `reg-${name}`,
     disabled: locked,
-    'aria-invalid': errors[id] ? true : undefined,
-    'aria-describedby': errors[id] ? `reg-${name}-error` : undefined,
+    'aria-invalid': shown[id] ? true : undefined,
+    'aria-describedby': shown[id] ? `reg-${name}-error` : undefined,
   });
   const error = (id: keyof Errors, name: string) =>
-    errors[id] && (
+    shown[id] && (
       <span id={`reg-${name}-error`} className="operator-form-feedback is-error">
-        {errors[id]}
+        {shown[id]}
       </span>
     );
   const times = result === 'EXECUTED' || result === 'INTERRUPTED';
@@ -134,7 +140,7 @@ export function RegularizePanel({ departure, gateway, canManage, onChanged }: Pa
       </form>
       {failed && (
         <div role="alert">
-          <p className="operator-form-feedback is-error">{failureText(failure, 'la regularización')}</p>
+          <p className="operator-form-feedback is-error">{failureText(failure, 'la regularización', result !== 'NOT_DONE')}</p>
           <button type="button" className="operator-outline" disabled={locked} onClick={() => void send()}>
             Reintentar
           </button>
