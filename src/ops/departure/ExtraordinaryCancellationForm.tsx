@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from 'react';
-import { Forbidden, Refused } from '../departures/model';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { Forbidden, Refused, Unavailable } from '../departures/model';
 import type { Departure, ReservationService } from './gateway';
 import { failureText } from './panelProps';
 import { useRegistration } from './useRegistration';
@@ -9,10 +9,14 @@ const MAX = 500;
 // What the person reads when the cancellation failed: a refusal of the service is told as such, and the text stays in every case.
 function failure(error: unknown): string {
   if (error instanceof Refused) {
-    return error.code === 'BUSINESS_RULE_VIOLATION'
-      ? 'El servicio no aceptó la cancelación: la reserva ya no está en ejecución o ya fue cancelada. Tus datos siguen aquí.'
-      : 'El servicio no aceptó la cancelación: la salida ya no está en ejecución; vuelve a abrirla para ver cómo quedó. Tus datos siguen aquí.';
+    if (error.code === 'BUSINESS_RULE_VIOLATION') {
+      return 'El servicio no aceptó la cancelación: la reserva ya no está en ejecución o ya fue cancelada. Tus datos siguen aquí.';
+    }
+    if (error.code === 'INVALID_STATUS_TRANSITION') {
+      return 'El servicio no aceptó la cancelación: la salida ya no está en ejecución; vuelve a abrirla para ver cómo quedó. Tus datos siguen aquí.';
+    }
   }
+  if (error instanceof Unavailable) return 'El servicio no respondió y la cancelación no se registró. Tus datos siguen aquí.';
   if (error instanceof Forbidden) return failureText(error, 'la cancelación extraordinaria');
   return 'No pudimos registrar la cancelación extraordinaria. Tus datos siguen aquí.';
 }
@@ -30,9 +34,18 @@ export function ExtraordinaryCancellationForm({ code, reservation, record, onDon
   const [text, setText] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string>();
-  const { sending, failed, error: failed_with, submit } = useRegistration();
+  const { sending, failed, error: failedWith, submit, clear } = useRegistration();
+  const field = useRef<HTMLTextAreaElement>(null);
+  const title = useRef<HTMLParagraphElement>(null);
+  const moved = useRef(false);
   const id = `cancellation-${reservation.reservationId}`;
   const justification = text.trim();
+
+  // the focus follows the person from the field to the confirmation and back (the element they were on is gone)
+  useEffect(() => {
+    if (!moved.current) return;
+    (confirming ? title.current : field.current)?.focus();
+  }, [confirming]);
 
   function next(event?: FormEvent) {
     event?.preventDefault();
@@ -41,6 +54,8 @@ export function ExtraordinaryCancellationForm({ code, reservation, record, onDon
       return;
     }
     setError(undefined);
+    clear();
+    moved.current = true;
     setConfirming(true);
   }
 
@@ -55,12 +70,20 @@ export function ExtraordinaryCancellationForm({ code, reservation, record, onDon
   if (confirming) {
     return (
       <div className="operator-form-wide" role="group" aria-labelledby={`${id}-title`}>
-        <p id={`${id}-title`} className="operator-copy">
+        <p id={`${id}-title`} ref={title} tabIndex={-1} className="operator-copy">
           Vas a cancelar la reserva de {reservation.customer}. Esta acción no se puede deshacer.
         </p>
         <p className="operator-copy">Justificación: {justification}</p>
         <div className="operator-form-actions">
-          <button type="button" className="operator-outline" disabled={sending} onClick={() => setConfirming(false)}>
+          <button
+            type="button"
+            className="operator-outline"
+            disabled={sending}
+            onClick={() => {
+              clear();
+              setConfirming(false);
+            }}
+          >
             Volver
           </button>
           <button type="button" className="operator-primary" disabled={sending} onClick={() => void send()}>
@@ -69,7 +92,7 @@ export function ExtraordinaryCancellationForm({ code, reservation, record, onDon
         </div>
         {failed && (
           <div role="alert">
-            <p className="operator-form-feedback is-error">{failure(failed_with)}</p>
+            <p className="operator-form-feedback is-error">{failure(failedWith)}</p>
             <button type="button" className="operator-outline" disabled={sending} onClick={() => void send()}>
               Reintentar
             </button>
@@ -84,6 +107,7 @@ export function ExtraordinaryCancellationForm({ code, reservation, record, onDon
       <label htmlFor={`${id}-text`}>Justificación de la cancelación extraordinaria</label>
       <textarea
         id={`${id}-text`}
+        ref={field}
         value={text}
         maxLength={MAX}
         aria-invalid={error ? true : undefined}
@@ -92,7 +116,7 @@ export function ExtraordinaryCancellationForm({ code, reservation, record, onDon
       />
       <span className="operator-copy">{`${text.length}/${MAX}`}</span>
       {error && (
-        <span id={`${id}-error`} className="operator-form-feedback is-error">
+        <span id={`${id}-error`} role="alert" className="operator-form-feedback is-error">
           {error}
         </span>
       )}

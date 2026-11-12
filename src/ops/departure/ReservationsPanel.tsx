@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Departure, ReservationService, ReservationState, ServiceResult, ServicesInput } from './gateway';
 import { ExtraordinaryCancellationForm } from './ExtraordinaryCancellationForm';
 import type { PanelProps } from './panelProps';
@@ -12,6 +12,9 @@ const STATE: Record<ReservationState, { label: string; className: string }> = {
   FINISHED: { label: 'Reserva finalizada', className: 'operator-status is-active' },
   CANCELLED: { label: 'Cancelada por incumplimiento de pago', className: 'operator-status is-failed' },
 };
+
+// A reservation cancelled extraordinarily is not one cancelled for a missing payment (spec 012 AC-PT-12.1).
+const EXTRAORDINARY = { label: 'Cancelada por emergencia (cancelación extraordinaria)', className: 'operator-status is-failed' };
 
 interface Row {
   result: ServiceResult;
@@ -40,6 +43,13 @@ export function ReservationsPanel({ departure, gateway, canManage, onChanged }: 
   const [rereadFailed, setRereadFailed] = useState(false);
   // the reservation whose extraordinary cancellation form is open (spec 012)
   const [cancelling, setCancelling] = useState<string>();
+  // the reservation whose action gets the focus back when its form is closed
+  const [returnFocus, setReturnFocus] = useState<string>();
+  useEffect(() => {
+    if (returnFocus === undefined || cancelling !== undefined) return;
+    document.getElementById(`open-cancellation-${returnFocus}`)?.focus();
+    setReturnFocus(undefined);
+  }, [returnFocus, cancelling]);
   const { sending, failed, submit } = useRegistration();
   const editable = departure.status === 'IN_EXECUTION';
   const locked = !canManage || sending;
@@ -111,7 +121,7 @@ export function ReservationsPanel({ departure, gateway, canManage, onChanged }: 
         departure.reservations.length === 0 && <p className="operator-copy">Esta salida no tiene reservas.</p>
       )}
       {departure.reservations.map((r) => {
-        const state = STATE[r.state];
+        const state = r.extraordinaryCancellation && r.state === 'CANCELLED' ? EXTRAORDINARY : STATE[r.state];
         const row = rowOf(r);
         const rowErrors = errors[r.reservationId] ?? {};
         const rowEditable = editable && r.state === 'IN_EXECUTION';
@@ -186,12 +196,7 @@ export function ReservationsPanel({ departure, gateway, canManage, onChanged }: 
                       checked={row.noShow}
                       disabled={locked}
                       onChange={(e) =>
-                        edit(
-                          r,
-                          e.target.checked
-                            ? { noShow: true, result: 'NOT_DELIVERED', served: '0' }
-                            : { noShow: false, result: 'DELIVERED', served: String(r.travelers) },
-                        )
+                        edit(r, e.target.checked ? { noShow: true, result: 'NOT_DELIVERED', served: '0' } : { noShow: false, result: 'DELIVERED', served: String(r.travelers) })
                       }
                     />{' '}
                     No se presentó sin aviso oportuno
@@ -221,10 +226,19 @@ export function ReservationsPanel({ departure, gateway, canManage, onChanged }: 
                     setCancelling(undefined);
                     onChanged(updated);
                   }}
-                  onClose={() => setCancelling(undefined)}
+                  onClose={() => {
+                    setCancelling(undefined);
+                    setReturnFocus(r.reservationId);
+                  }}
                 />
               ) : (
-                <button type="button" className="operator-outline" disabled={sending} onClick={() => setCancelling(r.reservationId)}>
+                <button
+                  id={`open-cancellation-${r.reservationId}`}
+                  type="button"
+                  className="operator-outline"
+                  disabled={sending}
+                  onClick={() => setCancelling(r.reservationId)}
+                >
                   Cancelación extraordinaria
                 </button>
               ))}
