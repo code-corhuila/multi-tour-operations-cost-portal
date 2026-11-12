@@ -103,23 +103,25 @@ export function ExtraordinaryCancellationForm({ code, reservation, record, onDon
   }
 
   return (
-    <form className="operator-form-wide" onSubmit={next} noValidate>
-      <label htmlFor={`${id}-text`}>Justificación de la cancelación extraordinaria</label>
-      <textarea
-        id={`${id}-text`}
-        ref={field}
-        value={text}
-        maxLength={MAX}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={error ? `${id}-error` : undefined}
-        onChange={(e) => setText(e.target.value)}
-      />
-      <span className="operator-copy">{`${text.length}/${MAX}`}</span>
-      {error && (
-        <span id={`${id}-error`} role="alert" className="operator-form-feedback is-error">
-          {error}
-        </span>
-      )}
+    <form className="operator-form-grid" onSubmit={next} noValidate>
+      <div className="operator-form-wide">
+        <label htmlFor={`${id}-text`}>Justificación de la cancelación extraordinaria</label>
+        <textarea
+          id={`${id}-text`}
+          ref={field}
+          value={text}
+          maxLength={MAX}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${id}-error` : undefined}
+          onChange={(e) => setText(e.target.value)}
+        />
+        <p className="operator-copy">{`${text.length}/${MAX}`}</p>
+        {error && (
+          <p id={`${id}-error`} role="alert" className="operator-form-feedback is-error">
+            {error}
+          </p>
+        )}
+      </div>
       <div className="operator-form-actions">
         <button type="button" className="operator-outline" onClick={onClose}>
           Cancelar
