@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState, type FormEvent } from 'react';
 import { effectiveCapacity, overlaps } from './capacity';
-import type { DeparturesGateway } from './model';
+import { FieldError, Forbidden, Refused, Unavailable, type DeparturesGateway } from './model';
 import { useAsync } from '../useAsync';
 import { interval, validateDeparture } from './validateDeparture';
 
@@ -13,7 +13,35 @@ export interface ScheduleDepartureFormProps {
   onSaved: (line: string) => void;
 }
 
-// Form of the Mockup admin-programar-salida.html (spec 005 PT-11) over the test data of the port.
+// The fields of the request, as the person knows them. The text is ours: the service speaks English to developers.
+const FIELD: Record<string, { id: 'tour' | 'start' | 'end'; message: string }> = {
+  serviceId: { id: 'tour', message: 'El tour no es válido.' },
+  scheduledStart: { id: 'start', message: 'La hora de inicio no es válida.' },
+  scheduledEnd: { id: 'end', message: 'La hora de finalización no es válida o es anterior al inicio.' },
+};
+
+function failure(error: unknown): { general: string[]; fields: Partial<Record<'tour' | 'start' | 'end', string>> } {
+  if (error instanceof FieldError) {
+    const fields: Partial<Record<'tour' | 'start' | 'end', string>> = {};
+    for (const { field } of error.fields) if (FIELD[field]) fields[FIELD[field].id] = FIELD[field].message;
+    return Object.keys(fields).length > 0 ? { general: [], fields } : { general: ['Revisa los datos de la salida.'], fields };
+  }
+  if (error instanceof Refused) {
+    return { general: [error.code === 'INVALID_STATUS_TRANSITION' ? 'La salida ya no está en un estado que permita este cambio.' : 'El servicio no aceptó la salida: el tour no está disponible o la hora de inicio ya pasó.'], fields: {} };
+  }
+  if (error instanceof Forbidden) return { general: ['No tienes permiso para programar salidas.'], fields: {} };
+  if (error instanceof Unavailable) return { general: ['El servicio no responde. Tus datos siguen aquí; intenta de nuevo.'], fields: {} };
+  return { general: ['No pudimos guardar la salida. Tus datos siguen aquí.'], fields: {} };
+}
+
+const FieldMessage = ({ id, text }: { id: string; text?: string }) =>
+  text ? (
+    <p id={`sch-${id}-error`} role="alert" className="operator-error" style={{ gridColumn: '1 / -1' }}>
+      {text}
+    </p>
+  ) : null;
+
+// Form of the Mockup admin-programar-salida.html (spec 005 PT-11) over the port: the test data, or the service for a new departure (spec 006).
 export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: ScheduleDepartureFormProps) {
   const load = useCallback(async () => {
     const [tours, vehicles, departures] = await Promise.all([gateway.listTours(), gateway.listVehicles(), gateway.listDepartures()]);
@@ -22,6 +50,7 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
   const { state, retry } = useAsync(load);
   const [form, setForm] = useState<{ tourId: string; date: string; start: string; end: string; vehicleIds: string[] }>();
   const [messages, setMessages] = useState<string[]>([]);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<'tour' | 'start' | 'end', string>>>({});
   const [sending, setSending] = useState(false);
   // One key per attempt: a retry of the same data after a failure reuses it; a new save, even of data seen before, gets another.
   const attempt = useRef<{ signature: string; key: string } | undefined>(undefined);
@@ -39,6 +68,17 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
   }
 
   const { tours, vehicles, departures } = state.data;
+  const withVehicles = gateway.supportsVehicles !== false;
+  if (tours.length === 0) {
+    return (
+      <div className="operator-content">
+        <p className="operator-copy">El catálogo no tiene tours activos para programar.</p>
+        <button type="button" className="operator-outline" onClick={onBack}>
+          Volver a salidas
+        </button>
+      </div>
+    );
+  }
   const editing = departures.find((d) => d.code === editCode);
   // First render of the form: filled from the departure being edited, or empty.
   const current =
@@ -57,12 +97,13 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
     hasInterval
       ? departures.find((d) => d.code !== editCode && d.status !== 'CANCELLED' && d.vehicleIds.includes(vehicleId) && overlaps(interval(current), d))
       : undefined;
-  const capacity = tour ? effectiveCapacity(tour.capacity, chosen.map((v) => v.capacity), tour.needsTransport) : 0;
+  const capacity = tour && !withVehicles ? tour.capacity : tour ? effectiveCapacity(tour.capacity, chosen.map((v) => v.capacity), tour.needsTransport) : 0;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const found = validateDeparture({ ...current, editingCode: editCode }, { tours, vehicles, departures });
+    const found = validateDeparture({ ...current, editingCode: editCode }, { tours, vehicles, departures, withVehicles });
     setMessages(found);
+    setFieldErrors({});
     if (found.length > 0 || !tour) return;
     setSending(true);
     try {
@@ -74,11 +115,14 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
         ? await gateway.updateDeparture({ code: editCode, tourId: current.tourId, start, end, vehicleIds: current.vehicleIds, key })
         : await gateway.scheduleDeparture({ tourId: current.tourId, start, end, vehicleIds: current.vehicleIds, key });
       const verb = editCode ? 'actualizada' : 'programada';
-      const tail = editCode ? '' : ' Ya se puede reservar.';
+      const tail = editCode || !withVehicles ? '' : ' Ya se puede reservar.';
+      const note = withVehicles ? '' : ' La lista muestra datos de prueba hasta que se conecte.';
       attempt.current = undefined;
-      onSaved(`Salida ${saved.code} ${verb} (${tour.name}, ${start.replace('T', ' ')}). Capacidad efectiva: ${capacity}.${tail}`);
-    } catch {
-      setMessages(['No pudimos guardar la salida. Tus datos siguen aquí.']);
+      onSaved(`Salida ${saved.code} ${verb} (${tour.name}, ${start.replace('T', ' ')}). ${withVehicles ? 'Capacidad efectiva' : 'Capacidad'}: ${capacity}.${tail}${note}`);
+    } catch (error) {
+      const { general, fields } = editCode ? { general: ['No pudimos guardar la salida. Tus datos siguen aquí.'], fields: {} } : failure(error);
+      setMessages(general);
+      setFieldErrors(fields);
     } finally {
       setSending(false);
     }
@@ -95,7 +139,7 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
           Volver a salidas
         </button>
       </header>
-      <p className="operator-eyebrow">Datos de prueba</p>
+      {withVehicles && <p className="operator-eyebrow">Datos de prueba</p>}
 
       <form onSubmit={submit} noValidate>
         <section className="operator-panel" aria-labelledby="sch-01">
@@ -108,7 +152,7 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
           )}
           <div className="operator-form-grid">
             <label htmlFor="sch-tour">Tour</label>
-            <select id="sch-tour" value={current.tourId} disabled={locked} onChange={(e) => set({ tourId: e.target.value })}>
+            <select id="sch-tour" aria-invalid={!!fieldErrors.tour} aria-describedby={fieldErrors.tour ? 'sch-tour-error' : undefined} value={current.tourId} disabled={locked} onChange={(e) => set({ tourId: e.target.value })}>
               <option value="">Selecciona un tour</option>
               {tours.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -116,12 +160,15 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
                 </option>
               ))}
             </select>
+            <FieldMessage id="tour" text={fieldErrors.tour} />
             <label htmlFor="sch-date">Fecha</label>
             <input id="sch-date" type="date" value={current.date} disabled={locked} onChange={(e) => set({ date: e.target.value })} />
             <label htmlFor="sch-start">Hora de inicio programada</label>
-            <input id="sch-start" type="time" value={current.start} disabled={locked} onChange={(e) => set({ start: e.target.value })} />
+            <input id="sch-start" type="time" aria-invalid={!!fieldErrors.start} aria-describedby={fieldErrors.start ? 'sch-start-error' : undefined} value={current.start} disabled={locked} onChange={(e) => set({ start: e.target.value })} />
+            <FieldMessage id="start" text={fieldErrors.start} />
             <label htmlFor="sch-end">Hora de finalización estimada</label>
-            <input id="sch-end" type="time" value={current.end} disabled={locked} onChange={(e) => set({ end: e.target.value })} />
+            <input id="sch-end" type="time" aria-invalid={!!fieldErrors.end} aria-describedby={fieldErrors.end ? 'sch-end-error' : undefined} value={current.end} disabled={locked} onChange={(e) => set({ end: e.target.value })} />
+            <FieldMessage id="end" text={fieldErrors.end} />
             <label htmlFor="sch-quota">Cupo del tour (viajeros)</label>
             <input id="sch-quota" type="number" value={tour ? tour.capacity : ''} readOnly />
             <label htmlFor="sch-state">Estado</label>
@@ -129,6 +176,7 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
           </div>
         </section>
 
+        {withVehicles ? (
         <section className="operator-panel" aria-labelledby="sch-02">
           <p className="operator-eyebrow">02 · Vehículos asignados</p>
           <h2 id="sch-02">Vehículos</h2>
@@ -152,6 +200,19 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
               : 'Selecciona un tour y vehículos para calcular la capacidad efectiva.'}
           </p>
         </section>
+        ) : (
+          <section className="operator-panel" aria-labelledby="sch-02">
+            <p className="operator-eyebrow">02 · Vehículos asignados</p>
+            <h2 id="sch-02">Vehículos</h2>
+            <p className="operator-copy">Los vehículos se asignan después.</p>
+            {tour?.needsTransport && (
+              <p className="operator-access-note">Este tour usa transporte: su capacidad es la del tour hasta que se asignen los vehículos.</p>
+            )}
+            <p className="operator-copy" aria-live="polite">
+              {tour ? `Capacidad de la salida: ${tour.capacity} viajeros (la del tour).` : 'Selecciona un tour para ver la capacidad.'}
+            </p>
+          </section>
+        )}
 
         {messages.length > 0 && (
           <div role="alert" className="operator-error">
