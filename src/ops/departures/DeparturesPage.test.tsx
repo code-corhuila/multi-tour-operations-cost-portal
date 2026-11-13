@@ -112,3 +112,32 @@ describe('departures list (spec 005)', () => {
     await waitFor(() => expect(calls).toBe(2));
   });
 });
+
+// Spec 008 PT8-01 (AC-PT-08.1, -08.8): over the adapter that talks to the service the page shows only real data.
+describe('departures list over the service (spec 008)', () => {
+  const connected = (): DeparturesGateway => ({
+    ...createDeparturesFixture(),
+    connected: true,
+    listDepartures: async () => [
+      { code: 'SAL-031', tourId: 'tour-1', start: '2026-12-01T08:00', end: '2026-12-01T16:00', vehicleIds: [], booked: 3, reservations: 0, status: 'SCHEDULED', capacity: 9 },
+    ],
+    listTours: async () => [{ id: 'tour-1', name: 'Cañón del río', capacity: 18, needsTransport: true }],
+    listVehicles: async () => [],
+  });
+
+  it('U·no_test_data_label_and_the_capacity_is_the_one_the_service_answers', async () => {
+    setup({ gateway: connected() });
+    const sal = await row('SAL-031');
+    expect(within(sal).getByText('9')).toBeInTheDocument();
+    expect(within(sal).getByText('3')).toBeInTheDocument();
+    expect(screen.queryByText('Datos de prueba')).not.toBeInTheDocument();
+  });
+
+  it('U·a_real_row_offers_no_edit_nor_cancel: they have no route yet', async () => {
+    setup({ gateway: connected() });
+    const sal = await row('SAL-031');
+    expect(within(sal).queryByRole('button', { name: 'Cancelar salida' })).not.toBeInTheDocument();
+    expect(within(sal).queryByRole('button', { name: /Editar/ })).not.toBeInTheDocument();
+    expect(within(sal).getByRole('button', { name: 'Registrar ejecución' })).toBeInTheDocument();
+  });
+});

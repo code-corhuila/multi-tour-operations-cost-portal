@@ -1,5 +1,7 @@
-// Port of the departure execution page to the operations-cost service (spec 004 plan D-02). Only the test-data
-// adapter exists: the contract of the service is not written yet (spec G-1).
+// Port of the departure execution page (spec 004 plan D-02). Two adapters: the test data (`fixture.ts`) and the one that talks to the
+// operations-cost service (`execution.ts`, spec 008), which serves only the panels the service can back.
+import type { PanelId } from './panels';
+
 export type DepartureStatus = 'SCHEDULED' | 'IN_EXECUTION' | 'PENDING_REGULARIZATION' | 'FINISHED' | 'CANCELLED';
 
 export interface HistoryEntry {
@@ -44,6 +46,8 @@ export interface Departure {
   actualStart?: string;
   actualEnd?: string;
   mark: string;
+  // Present only for a departure that ended as an interruption (PDR K1).
+  interruptionCause?: string;
   reservations: ReservationService[];
   novelties: Novelty[];
   history: HistoryEntry[];
@@ -93,6 +97,10 @@ export interface RegularizationInput {
 }
 
 export interface DepartureExecutionGateway {
+  // True for the adapter that talks to the service; absent for the test data.
+  connected?: boolean;
+  // The panels this adapter can serve; absent means all of them. A panel the service cannot back yet is not drawn (spec 008 D-03).
+  panels?: readonly PanelId[];
   // Resolves undefined when the departure does not exist.
   getDeparture(code: string): Promise<Departure | undefined>;
   registerStart(input: StartInput): Promise<Departure>;

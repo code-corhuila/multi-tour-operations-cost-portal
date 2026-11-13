@@ -26,6 +26,8 @@ export interface DepartureRow {
   booked: number;
   reservations: number;
   status: DepartureStatus;
+  // The effective capacity the service answers; the test data leave it out and the page computes it.
+  capacity?: number;
 }
 
 export interface CancelInput {
