@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { mount } from './mount';
 import type { ApiClient, MountProps } from './contract';
@@ -9,13 +9,19 @@ const catalog = {
 };
 const noVehicles = { data: [], meta: { page: 1, limit: 100, total: 0, totalPages: 1 } };
 const created = { code: 'SAL-031', status: 'SCHEDULED', scheduledStart: '2026-12-01T13:00:00Z', scheduledEnd: '2026-12-01T19:00:00Z', capacity: 12, booked: 0 };
+const listed = {
+  data: [{ ...created, serviceId: 'svc-1', pendingRegularization: false, interrupted: false, vehicles: [] }],
+  meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
+};
 const request = () =>
-  vi.fn(async (path: string) => (path.includes('catalog') ? catalog : path.includes('/vehicles') ? noVehicles : created)) as unknown as ApiClient['request'] &
-    ReturnType<typeof vi.fn>;
+  vi.fn(async (path: string) =>
+    path.includes('catalog') ? catalog : path.includes('/vehicles') ? noVehicles : path.startsWith('/api/v1/operations-cost/departures?') ? listed : /\/departures\/SAL-\d+$/.test(path) ? { ...created, serviceId: 'svc-1', pendingRegularization: false, interrupted: false, vehicles: [] } : created,
+  ) as unknown as ApiClient['request'] & ReturnType<typeof vi.fn>;
 
-const props = (roles: string[], apiClient = { request: request() }): MountProps => ({
+const MANAGE = 'MANAGE_DEPARTURE_EXECUTION';
+const props = (roles: string[], apiClient = { request: request() }, permissions: string[] = [MANAGE]): MountProps => ({
   apiClient,
-  session: { roles, open: vi.fn(), close: vi.fn() },
+  session: { roles, permissions, open: vi.fn(), close: vi.fn() },
 });
 
 // Spec 001 PT-01 and PT-03: the container mounts the portal and the page is shown only to the operator roles.
@@ -78,13 +84,30 @@ describe('operations portal mount (RN-OPS-PT-01)', () => {
     unmount();
   });
 
-  it('U·manager_sees_no_schedule_link: only the Administrator schedules', async () => {
+  it('U·a_collaborator_with_the_permission_sees_no_schedule_link: only the Administrator schedules', async () => {
     const element = document.createElement('div');
     document.body.appendChild(element);
-    const unmount = mount(element, { ...props(['MANAGER']), area: 'departures' });
+    const unmount = mount(element, { ...props(['OPERATIONAL_COLLABORATOR']), area: 'departures' });
     expect(await screen.findByRole('heading', { name: 'Salidas' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Programar salida' })).not.toBeInTheDocument();
     unmount();
+  });
+
+  it('U·an_optional_role_with_the_permission_lists_but_never_schedules_and_without_the_claim_sees_nothing', async () => {
+    const element = document.createElement('div');
+    document.body.appendChild(element);
+    const unmount = mount(element, { ...props(['MANAGER']), area: 'departures' });
+    expect(await within(element).findByRole('heading', { name: 'Salidas' })).toBeInTheDocument();
+    expect(within(element).queryByRole('button', { name: 'Programar salida' })).not.toBeInTheDocument();
+    unmount();
+    const bare = document.createElement('div');
+    document.body.appendChild(bare);
+    // a container that gives no `permissions` at all is a refusal, not a crash
+    const withoutClaim = { ...props(['TENANT_ADMINISTRATOR']), area: 'departures' as const };
+    delete (withoutClaim.session as { permissions?: string[] }).permissions;
+    const unmountBare = mount(bare, withoutClaim);
+    expect(await within(bare).findByRole('alert')).toHaveTextContent('No tienes acceso a las salidas');
+    unmountBare();
   });
 
   it('U·hidden_without_the_role: a customer sees no operation data', async () => {
@@ -135,17 +158,42 @@ describe('operations portal mount (RN-OPS-PT-01)', () => {
     }
   });
 
-  it('C·the_list_and_the_edit_stay_on_the_test_adapter: the client is asked only for the vehicles', async () => {
+  it('C·the_list_comes_from_the_service_and_its_rows_have_no_test_data_nor_edit', async () => {
     const apiClient = { request: request() };
     const element = document.createElement('div');
     document.body.appendChild(element);
     const unmount = mount(element, { ...props(['TENANT_ADMINISTRATOR'], apiClient), area: 'departures' });
     expect(await screen.findByRole('heading', { name: 'Salidas' })).toBeInTheDocument();
-    await screen.findByText('SAL-018');
-    fireEvent.click(screen.getAllByRole('button', { name: /Editar/ })[0]);
-    expect(await screen.findByRole('heading', { name: /Editar salida/ })).toBeInTheDocument();
-    // only the section of vehicles talks to the service; the list and the edit never do
-    expect((apiClient.request as ReturnType<typeof vi.fn>).mock.calls.every(([path]) => String(path).includes('/operations-cost/vehicles'))).toBe(true);
+    expect(await screen.findByText('SAL-031')).toBeInTheDocument();
+    expect(screen.queryByText('SAL-018')).not.toBeInTheDocument();
+    expect(screen.queryByText('Datos de prueba')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Editar/ })).not.toBeInTheDocument();
+    expect(apiClient.request).toHaveBeenCalledWith('/api/v1/operations-cost/departures?limit=100&page=1');
+    unmount();
+  });
+
+  it('C·opening_a_real_row_reads_that_departure_from_the_service_and_goes_back', async () => {
+    const apiClient = { request: request() };
+    const element = document.createElement('div');
+    document.body.appendChild(element);
+    const unmount = mount(element, { ...props(['TENANT_ADMINISTRATOR'], apiClient), area: 'departures' });
+    fireEvent.click(await within(element).findByRole('button', { name: 'Registrar ejecución' }));
+    expect(await within(element).findByRole('heading', { name: 'Registrar ejecución de salida' })).toBeInTheDocument();
+    await waitFor(() => expect(apiClient.request).toHaveBeenCalledWith('/api/v1/operations-cost/departures/SAL-031'));
+    expect(within(element).queryByText('Datos de prueba')).not.toBeInTheDocument();
+    fireEvent.click(within(element).getByRole('button', { name: 'Volver a salidas' }));
+    expect(await within(element).findByRole('heading', { name: 'Salidas' })).toBeInTheDocument();
+    unmount();
+  });
+
+  it('C·without_the_permission_the_departures_are_not_offered_even_to_the_administrator', async () => {
+    const apiClient = { request: request() };
+    const element = document.createElement('div');
+    document.body.appendChild(element);
+    const unmount = mount(element, { ...props(['TENANT_ADMINISTRATOR'], apiClient, []), area: 'departures' });
+    expect(await within(element).findByRole('alert')).toHaveTextContent('No tienes acceso a las salidas');
+    expect(screen.queryByRole('heading', { name: 'Salidas' })).not.toBeInTheDocument();
+    expect(apiClient.request).not.toHaveBeenCalledWith(expect.stringContaining('/departures'));
     unmount();
   });
 });

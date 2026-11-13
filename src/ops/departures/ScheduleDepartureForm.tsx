@@ -142,9 +142,8 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
         : await gateway.scheduleDeparture({ tourId: current.tourId, start, end, vehicleIds, key });
       const verb = editCode ? 'actualizada' : 'programada';
       const tail = editCode || connected ? '' : ' Ya se puede reservar.';
-      const note = connected ? ' La lista muestra datos de prueba hasta que se conecte.' : '';
       attempt.current = undefined;
-      onSaved(`Salida ${saved.code} ${verb} (${tour.name}, ${start.replace('T', ' ')}). Capacidad efectiva: ${capacity}.${tail}${note}`);
+      onSaved(`Salida ${saved.code} ${verb} (${tour.name}, ${start.replace('T', ' ')}). Capacidad efectiva: ${capacity}.${tail}`);
     } catch (error) {
       const { general, fields } = editCode ? { general: ['No pudimos guardar la salida. Tus datos siguen aquí.'], fields: {} } : failure(error);
       setMessages(general);

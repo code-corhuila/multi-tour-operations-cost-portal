@@ -87,10 +87,10 @@ describe('scheduling', () => {
     }
   });
 
-  it('A·the_other_operations_stay_on_the_test_adapter', async () => {
+  it('A·the_edit_and_the_cancellation_stay_on_the_test_adapter', async () => {
     const { client, calls } = fakeClient(() => created);
     const gateway = createDeparturesGateway(client, createDeparturesFixture());
-    expect((await gateway.listDepartures()).length).toBeGreaterThan(0);
+    await expect(gateway.cancelDeparture({ code: 'SAL-018', cause: 'x', key: 'k' })).resolves.toBeDefined();
     expect(calls).toHaveLength(0);
   });
 });
@@ -159,5 +159,56 @@ describe('the errors', () => {
     expect(caught.message).not.toMatch(/stack|db\.Host|trace-77/);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('trace-77'));
     warn.mockRestore();
+  });
+});
+
+const row = (n: number, extra: Record<string, unknown> = {}) => ({
+  code: `SAL-0${n}`,
+  serviceId: `id-${n}`,
+  status: 'SCHEDULED',
+  scheduledStart: '2026-12-01T13:00:00Z',
+  scheduledEnd: '2026-12-01T21:00:00Z',
+  capacity: 12,
+  booked: 4,
+  pendingRegularization: false,
+  interrupted: false,
+  vehicles: [{ vehicleId: 'veh-1', name: 'Van', capacity: 12 }],
+  ...extra,
+});
+
+describe('the list of departures (spec 008 PT8-01)', () => {
+  it('C·the_departures_are_read_from_the_service_and_mapped_to_the_wall_clock_of_the_tenant', async () => {
+    const { client, calls } = fakeClient(() => page([row(21), row(22, { status: 'IN_EXECUTION', vehicles: [] })], 1, 1));
+    const gateway = createDeparturesGateway(client, createDeparturesFixture());
+    const rows = await gateway.listDepartures();
+    expect(calls).toHaveLength(1);
+    expect(calls[0].path).toBe('/api/v1/operations-cost/departures?limit=100&page=1');
+    expect(rows).toEqual([
+      { code: 'SAL-021', tourId: 'id-21', start: '2026-12-01T08:00', end: '2026-12-01T16:00', vehicleIds: ['veh-1'], booked: 4, reservations: 0, status: 'SCHEDULED', capacity: 12 },
+      { code: 'SAL-022', tourId: 'id-22', start: '2026-12-01T08:00', end: '2026-12-01T16:00', vehicleIds: [], booked: 4, reservations: 0, status: 'IN_EXECUTION', capacity: 12 },
+    ]);
+  });
+
+  it('A·the_departures_are_read_page_by_page_up_to_five_pages', async () => {
+    const { client, calls } = fakeClient((call) => page([row(Number(call.path.split('page=')[1]))], Number(call.path.split('page=')[1]), 9));
+    const rows = await createDeparturesGateway(client, createDeparturesFixture()).listDepartures();
+    expect(calls).toHaveLength(5);
+    expect(rows).toHaveLength(5);
+  });
+
+  it('A·the_list_stops_at_the_last_page', async () => {
+    const { client, calls } = fakeClient((call) => page([row(Number(call.path.split('page=')[1]))], Number(call.path.split('page=')[1]), 2));
+    expect(await createDeparturesGateway(client, createDeparturesFixture()).listDepartures()).toHaveLength(2);
+    expect(calls).toHaveLength(2);
+  });
+
+  it('C·a_refusal_is_translated_and_never_shows_the_body', async () => {
+    await expect(failing({ status: 403 }).listDepartures()).rejects.toBeInstanceOf(Forbidden);
+    await expect(failing({ status: 503 }).listDepartures()).rejects.toBeInstanceOf(Unavailable);
+    await expect(failing({ status: 500 }).listDepartures()).rejects.toBeInstanceOf(Failed);
+  });
+
+  it('U·the_gateway_that_talks_to_the_service_says_so', () => {
+    expect(createDeparturesGateway(fakeClient(() => page([], 1, 1)).client, createDeparturesFixture()).connected).toBe(true);
   });
 });

@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import type { MountProps } from './contract';
 import { createFixtureGateway } from './ops/fixtureGateway';
 import { DepartureExecutionPage } from './ops/departure/DepartureExecutionPage';
+import { createExecutionGateway } from './ops/departure/execution';
 import { DeparturesPage } from './ops/departures/DeparturesPage';
 import { ScheduleDepartureForm } from './ops/departures/ScheduleDepartureForm';
 import { VehiclesSection } from './ops/departures/VehiclesSection';
@@ -16,9 +17,9 @@ import { ensureStylesheet } from './ui/stylesheet';
 // Roles of the token (security.yaml). The screen is chosen by role; the services still refuse every call that is not
 // for the role, so this only decides what to show (RN-OPS-PT-01).
 const OPERATOR_ROLES = ['TENANT_ADMINISTRATOR', 'OPERATIONAL_COLLABORATOR', 'MANAGER'];
-// shortcut: the permission "Gestionar ejecución de salidas" is not in the token yet; these roles stand for it until the
-// contract of the service says otherwise (spec 004 RN-OPS-PT-30).
-const MANAGE_ROLES = ['TENANT_ADMINISTRATOR', 'MANAGER'];
+// "Gestionar ejecución de salidas": the claim `permissions` of the token carries it as this code (spec 008 plan D-04). The
+// Administrator holds it by profile; a collaborator holds it when an Administrator granted it.
+const MANAGE_DEPARTURE_EXECUTION = 'MANAGE_DEPARTURE_EXECUTION';
 // Scheduling, editing and cancelling a departure are the Administrator's (RN-OPS-PT-58).
 const SCHEDULE_ROLES = ['TENANT_ADMINISTRATOR'];
 
@@ -41,7 +42,9 @@ interface DepartureFixture {
 function App({ session, area: areaProp, initialParams, apiClient }: MountProps) {
   const area = areaProp ?? (initialParams?.area === 'departures' || initialParams?.area === 'operation' ? initialParams.area : undefined);
   const gateway = useMemo(createFixtureGateway, []);
-  const [departure, setDeparture] = useState<string>();
+  // The code of the departure open on its page, and where it comes from: a row of the real list reads the service, a row of the
+  // test data of the operation page reads the test data (spec 008 plan D-02).
+  const [departure, setDeparture] = useState<{ code: string; real: boolean }>();
   const [fixture, setFixture] = useState<DepartureFixture>();
   const [view, setView] = useState<'operation' | 'departures'>(area === 'departures' ? 'departures' : 'operation');
   // The form of a departure is a state of the Salidas area: new (editing undefined) or editing a code.
@@ -62,10 +65,12 @@ function App({ session, area: areaProp, initialParams, apiClient }: MountProps) 
       );
     }
   }, []);
-  // The list and the edit stay on the test data (spec 006 G-2, G-5); only the new departure goes to the service.
+  // The list, the new departure and the vehicles go to the service; the edit and the cancellation stay on the test data (HU-OPS-006).
   const testDepartures = fixture?.departures ?? noDepartures;
   // The container hands one stable client for the life of the mount; a new object per render would reload the form.
   const scheduling = useMemo(() => createDeparturesGateway(apiClient, testDepartures), [apiClient, testDepartures]);
+  const execution = useMemo(() => createExecutionGateway(apiClient), [apiClient]);
+  const canManage = (session.permissions ?? []).includes(MANAGE_DEPARTURE_EXECUTION);
   if (!session.roles.some((role) => OPERATOR_ROLES.includes(role))) {
     return (
       <p role="alert" className="operator-copy">
@@ -74,11 +79,24 @@ function App({ session, area: areaProp, initialParams, apiClient }: MountProps) 
     );
   }
   // The portal keeps its own view: the container routes to the area, not inside it.
-  if (departure && fixture) {
-    const canManage = session.roles.some((role) => MANAGE_ROLES.includes(role));
-    return <DepartureExecutionPage gateway={fixture.gateway} code={departure} canManage={canManage} onBack={() => setDeparture(undefined)} />;
+  if (departure && (departure.real || fixture)) {
+    return (
+      <DepartureExecutionPage
+        gateway={departure.real ? execution : fixture!.gateway}
+        code={departure.code}
+        canManage={canManage}
+        onBack={() => setDeparture(undefined)}
+      />
+    );
   }
   if (view === 'departures') {
+    if (!canManage) {
+      return (
+        <p role="alert" className="operator-copy">
+          No tienes acceso a las salidas.
+        </p>
+      );
+    }
     if (import.meta.env.DEV && !fixture) return <p role="status">Cargando…</p>;
     const roles = session.roles;
     const canSchedule = roles.some((role) => SCHEDULE_ROLES.includes(role));
@@ -99,10 +117,10 @@ function App({ session, area: areaProp, initialParams, apiClient }: MountProps) 
     return (
       <DeparturesPage
         key={notice}
-        gateway={testDepartures}
+        gateway={scheduling}
         canSchedule={canSchedule}
-        canManage={roles.some((role) => MANAGE_ROLES.includes(role))}
-        onOpen={setDeparture}
+        canManage={canManage}
+        onOpen={(code) => setDeparture({ code, real: true })}
         onSchedule={() => {
           setNotice(undefined);
           setForm({});
@@ -117,7 +135,7 @@ function App({ session, area: areaProp, initialParams, apiClient }: MountProps) 
       </DeparturesPage>
     );
   }
-  return <OperationsPage gateway={gateway} onRegister={(reservationId) => fixture && setDeparture(fixture.codeOf(reservationId))} />;
+  return <OperationsPage gateway={gateway} onRegister={(reservationId) => fixture && setDeparture({ code: fixture.codeOf(reservationId), real: false })} />;
 }
 
 // The container calls this with its own client and session; the portal never creates either (Annex H).
