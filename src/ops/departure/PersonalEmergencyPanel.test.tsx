@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { Refused, Unavailable } from '../departures/model';
 import { DepartureExecutionPage } from './DepartureExecutionPage';
@@ -153,5 +153,72 @@ describe('the personal emergency in the panel of the reservations', () => {
     await waitFor(() => expect(within(panel).getByRole('button', { name: 'Confirmar emergencia' })).toBeDisabled());
     release();
     await within(panel).findByRole('group', { name: 'Emergencia personal de Cliente de prueba' });
+  });
+
+  it('U·the_record_says_the_reservation_goes_on_only_while_it_is_in_execution_and_not_cancelled', async () => {
+    const gateway = createDepartureFixture();
+    await gateway.registerNovelty({ code: 'SAL-021', reservationId: 'RES-1002', detail: 'Se lastimó una pierna', emergency: true, affected: 1, key: 'emergency-key-1' });
+    await gateway.recordExtraordinaryCancellation({ code: 'SAL-021', reservationId: 'RES-1002', justification: 'Una emergencia', key: 'cancel-key-1' });
+    setup('SAL-021', gateway);
+    const record = await within(await panelOf()).findByRole('group', { name: 'Emergencia personal de Cliente de prueba' });
+    expect(within(record).queryByText(/sigue en ejecución/)).toBeNull();
+  });
+
+  it('U·a_record_without_travelers_never_says_undefined_and_one_traveler_is_singular', async () => {
+    const gateway = createDepartureFixture();
+    await gateway.registerNovelty({ code: 'SAL-021', reservationId: 'RES-1002', detail: 'Se desmayó', emergency: true, affected: 1, key: 'emergency-key-1' });
+    const read = gateway.getDeparture;
+    gateway.getDeparture = async (code) => {
+      const departure = await read(code);
+      return departure && { ...departure, novelties: departure.novelties.map(({ affected: _affected, ...rest }) => rest) };
+    };
+    setup('SAL-021', gateway);
+    const record = await within(await panelOf()).findByRole('group', { name: 'Emergencia personal de Cliente de prueba' });
+    expect(record).not.toHaveTextContent('undefined');
+    const other = createDepartureFixture();
+    await other.registerNovelty({ code: 'SAL-021', reservationId: 'RES-1004', detail: 'Se desmayó', emergency: true, affected: 1, key: 'emergency-key-2' });
+    cleanup();
+    setup('SAL-021', other);
+    expect(await within(await panelOf()).findByText(/· 1 viajero ·/)).toBeInTheDocument();
+  });
+
+  it('U·the_two_forms_are_never_open_together_and_no_opener_works_while_a_send_is_pending', async () => {
+    const gateway = createDepartureFixture();
+    let release: () => void = () => {};
+    const original = gateway.registerNovelty;
+    gateway.registerNovelty = async (input) => {
+      await new Promise<void>((resolve) => (release = resolve));
+      return original(input);
+    };
+    setup('SAL-021', gateway);
+    const panel = await open();
+    fireEvent.click(within(panel).getAllByRole('button', { name: 'Cancelación extraordinaria' })[0]);
+    expect(within(panel).queryByLabelText(TRAVELERS)).toBeNull();
+    fireEvent.click(within(panel).getAllByRole('button', { name: ACTION })[0]);
+    fill(panel, '1', 'Se desmayó');
+    next(panel);
+    confirm(panel);
+    await waitFor(() => expect(within(panel).getAllByRole('button', { name: 'Cancelación extraordinaria' })[0]).toBeDisabled());
+    release();
+    await within(panel).findByRole('group', { name: 'Emergencia personal de Cliente de prueba' });
+  });
+
+  it('U·a_refusal_is_told_by_its_code_and_the_detail_is_measured_as_the_service_does', async () => {
+    const gateway = createDepartureFixture();
+    const errors = [new Refused('INVALID_STATUS_TRANSITION'), new Refused('BUSINESS_RULE_VIOLATION')];
+    let calls = 0;
+    gateway.registerNovelty = async () => {
+      throw errors[calls++];
+    };
+    setup('SAL-021', gateway);
+    const panel = await open();
+    fill(panel, '1', ' ' + 'd'.repeat(1000) + ' ');
+    next(panel);
+    expect(within(panel).queryByText('Escribe qué ocurrió (1 a 1000 caracteres).')).toBeNull();
+    confirm(panel);
+    expect(await within(panel).findByRole('alert')).toHaveTextContent(/ya no está en ejecución/);
+    fireEvent.click(within(panel).getByRole('button', { name: 'Reintentar' }));
+    await waitFor(() => expect(calls).toBe(2));
+    expect(await within(panel).findByRole('alert')).toHaveTextContent(/ya tiene una emergencia/);
   });
 });
