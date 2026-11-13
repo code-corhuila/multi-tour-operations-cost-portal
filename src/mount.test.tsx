@@ -1,10 +1,14 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { mount } from './mount';
-import type { MountProps } from './contract';
+import type { ApiClient, MountProps } from './contract';
 
-const props = (roles: string[]): MountProps => ({
-  apiClient: { request: vi.fn() },
+const catalog = { data: [{ serviceId: 'svc-1', commercialName: 'Cañón del río', configuredCapacity: 12, transportRequired: false }], meta: { page: 1, limit: 100, total: 1, totalPages: 1 } };
+const created = { code: 'SAL-031', status: 'SCHEDULED', scheduledStart: '2026-12-01T13:00:00Z', scheduledEnd: '2026-12-01T19:00:00Z', capacity: 12, booked: 0 };
+const request = () => vi.fn(async (path: string) => (path.includes('catalog') ? catalog : created)) as unknown as ApiClient['request'] & ReturnType<typeof vi.fn>;
+
+const props = (roles: string[], apiClient = { request: request() }): MountProps => ({
+  apiClient,
   session: { roles, open: vi.fn(), close: vi.fn() },
 });
 
@@ -63,5 +67,58 @@ describe('operations portal mount (RN-OPS-PT-01)', () => {
     mount(element, props(['FINAL_CUSTOMER']));
     expect(await screen.findByRole('alert')).toHaveTextContent('No tienes acceso');
     expect(screen.queryByText('Salidas por preparar')).not.toBeInTheDocument();
+  });
+
+  // Spec 006 PT6-04: the container's client reaches the schedule form only.
+  it('C·the_schedule_form_calls_the_client_the_container_gave', async () => {
+    const apiClient = { request: request() };
+    const element = document.createElement('div');
+    document.body.appendChild(element);
+    const unmount = mount(element, { ...props(['TENANT_ADMINISTRATOR'], apiClient), area: 'departures' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Programar salida' }));
+    fireEvent.change(await screen.findByLabelText('Tour'), { target: { value: 'svc-1' } });
+    fireEvent.change(screen.getByLabelText('Fecha'), { target: { value: '2026-12-01' } });
+    fireEvent.change(screen.getByLabelText('Hora de inicio programada'), { target: { value: '08:00' } });
+    fireEvent.change(screen.getByLabelText('Hora de finalización estimada'), { target: { value: '14:00' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar salida' }));
+    expect(await screen.findByText(/Salida SAL-031 programada/)).toBeInTheDocument();
+    expect(apiClient.request).toHaveBeenCalledWith(
+      '/api/v1/operations-cost/departures',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Idempotency-Key': expect.stringMatching(/^schedule:/) },
+        body: expect.objectContaining({ serviceId: 'svc-1', scheduledStart: '2026-12-01T13:00:00Z', timeZone: 'America/Bogota' }),
+      }),
+    );
+    unmount();
+  });
+
+  it('C·without_the_test_data_the_form_is_still_reachable: a production build has an empty list', async () => {
+    vi.stubEnv('DEV', false);
+    try {
+      const element = document.createElement('div');
+      document.body.appendChild(element);
+      const unmount = mount(element, { ...props(['TENANT_ADMINISTRATOR']), area: 'departures' });
+      expect(await screen.findByRole('heading', { name: 'Salidas' })).toBeInTheDocument();
+      expect(screen.queryByText('SAL-018')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Programar salida' }));
+      expect(await screen.findByLabelText('Tour')).toBeInTheDocument();
+      unmount();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('C·the_list_and_the_edit_stay_on_the_test_adapter: the client is not called', async () => {
+    const apiClient = { request: request() };
+    const element = document.createElement('div');
+    document.body.appendChild(element);
+    const unmount = mount(element, { ...props(['TENANT_ADMINISTRATOR'], apiClient), area: 'departures' });
+    expect(await screen.findByRole('heading', { name: 'Salidas' })).toBeInTheDocument();
+    await screen.findByText('SAL-018');
+    fireEvent.click(screen.getAllByRole('button', { name: /Editar/ })[0]);
+    expect(await screen.findByRole('heading', { name: /Editar salida/ })).toBeInTheDocument();
+    expect(apiClient.request).not.toHaveBeenCalled();
+    unmount();
   });
 });

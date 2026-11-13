@@ -6,6 +6,7 @@ import { DepartureExecutionPage } from './ops/departure/DepartureExecutionPage';
 import { DeparturesPage } from './ops/departures/DeparturesPage';
 import { ScheduleDepartureForm } from './ops/departures/ScheduleDepartureForm';
 import type { DeparturesGateway } from './ops/departures/model';
+import { createDeparturesGateway } from './ops/departures/scheduling';
 import type { DepartureExecutionGateway } from './ops/departure/gateway';
 import { OperationsPage } from './ops/OperationsPage';
 import './ui/operator.css';
@@ -20,13 +21,23 @@ const MANAGE_ROLES = ['TENANT_ADMINISTRATOR', 'MANAGER'];
 // Scheduling, editing and cancelling a departure are the Administrator's (RN-OPS-PT-58).
 const SCHEDULE_ROLES = ['TENANT_ADMINISTRATOR'];
 
+// What the list and the edit use where the test data do not travel (a production build): nothing, and nothing is saved.
+const noDepartures: DeparturesGateway = {
+  listDepartures: async () => [],
+  listTours: async () => [],
+  listVehicles: async () => [],
+  scheduleDeparture: () => Promise.reject(new Error('NOT_AVAILABLE')),
+  updateDeparture: () => Promise.reject(new Error('NOT_AVAILABLE')),
+  cancelDeparture: () => Promise.reject(new Error('NOT_AVAILABLE')),
+};
+
 interface DepartureFixture {
   gateway: DepartureExecutionGateway;
   departures: DeparturesGateway;
   codeOf: (reservationId: string) => string;
 }
 
-function App({ session, area: areaProp, initialParams }: MountProps) {
+function App({ session, area: areaProp, initialParams, apiClient }: MountProps) {
   const area = areaProp ?? (initialParams?.area === 'departures' || initialParams?.area === 'operation' ? initialParams.area : undefined);
   const gateway = useMemo(createFixtureGateway, []);
   const [departure, setDeparture] = useState<string>();
@@ -50,6 +61,10 @@ function App({ session, area: areaProp, initialParams }: MountProps) {
       );
     }
   }, []);
+  // The list and the edit stay on the test data (spec 006 G-2, G-5); only the new departure goes to the service.
+  const testDepartures = fixture?.departures ?? noDepartures;
+  // The container hands one stable client for the life of the mount; a new object per render would reload the form.
+  const scheduling = useMemo(() => createDeparturesGateway(apiClient, testDepartures), [apiClient, testDepartures]);
   if (!session.roles.some((role) => OPERATOR_ROLES.includes(role))) {
     return (
       <p role="alert" className="operator-copy">
@@ -63,14 +78,14 @@ function App({ session, area: areaProp, initialParams }: MountProps) {
     return <DepartureExecutionPage gateway={fixture.gateway} code={departure} canManage={canManage} onBack={() => setDeparture(undefined)} />;
   }
   if (view === 'departures') {
-    if (!fixture) return <p className="operator-copy">Las salidas de prueba no están disponibles en esta versión.</p>;
+    if (import.meta.env.DEV && !fixture) return <p role="status">Cargando…</p>;
     const roles = session.roles;
     const canSchedule = roles.some((role) => SCHEDULE_ROLES.includes(role));
     // Only the Administrator reaches the form; anyone else keeps the list (RN-OPS-PT-58).
     if (form && canSchedule) {
       return (
         <ScheduleDepartureForm
-          gateway={fixture.departures}
+          gateway={form.code ? testDepartures : scheduling}
           editCode={form.code}
           onBack={() => setForm(undefined)}
           onSaved={(line) => {
@@ -83,7 +98,7 @@ function App({ session, area: areaProp, initialParams }: MountProps) {
     return (
       <DeparturesPage
         key={notice}
-        gateway={fixture.departures}
+        gateway={testDepartures}
         canSchedule={canSchedule}
         canManage={roles.some((role) => MANAGE_ROLES.includes(role))}
         onOpen={setDeparture}
