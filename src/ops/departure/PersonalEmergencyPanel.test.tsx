@@ -107,7 +107,7 @@ describe('the personal emergency in the panel of the reservations', () => {
     expect(within(record).getByText(/2 viajeros/)).toBeInTheDocument();
     expect(within(record).getByText(/La reserva sigue en ejecución/)).toBeInTheDocument();
     expect(within(panel).getAllByRole('button', { name: ACTION })).toHaveLength(1);
-    expect(within(panel).getAllByText('En ejecución').length).toBeGreaterThan(0);
+    expect(within(panel).getAllByText('Reserva en ejecución').length).toBeGreaterThan(0);
   });
 
   it('U·a_retry_keeps_the_key_changed_data_gets_a_new_one_and_a_refusal_keeps_the_data', async () => {
