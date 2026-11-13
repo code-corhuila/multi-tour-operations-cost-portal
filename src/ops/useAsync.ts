@@ -17,5 +17,13 @@ export function useAsync<T>(load: () => Promise<T>): { state: AsyncState<T>; ret
   }, [load]);
 
   useEffect(run, [run]);
-  return { state, retry: run, set: (data) => setState({ kind: 'data', data }) };
+  // A value set by hand replaces any answer still on its way, so an older load never overwrites it.
+  return {
+    state,
+    retry: run,
+    set: (data) => {
+      latest.current++;
+      setState({ kind: 'data', data });
+    },
+  };
 }

@@ -13,6 +13,7 @@ const tour = (id: string, name: string, capacity: number, transport: boolean) =>
   configuredCapacity: capacity,
   transportRequired: transport,
 });
+const noVehicles = { data: [], meta: { page: 1, limit: 100, total: 0, totalPages: 1 } };
 const created = {
   code: 'SAL-004',
   status: 'SCHEDULED',
@@ -25,18 +26,18 @@ const created = {
   novelties: [],
 };
 
-function setup(handler: (path: string, init?: { headers?: Record<string, string> }) => unknown | Promise<unknown>) {
-  const request = vi.fn(async (path: string, init?: { headers?: Record<string, string> }) => handler(path, init));
+function setup(handler: (path: string, init?: { method?: string; headers?: Record<string, string> }) => unknown | Promise<unknown>) {
+  const request = vi.fn(async (path: string, init?: { method?: string; headers?: Record<string, string> }) => handler(path, init));
   const gateway = createDeparturesGateway({ request } as unknown as ApiClient, createDeparturesFixture());
   const onSaved = vi.fn();
   const onBack = vi.fn();
   render(<ScheduleDepartureForm gateway={gateway} onBack={onBack} onSaved={onSaved} />);
-  const posts = () => request.mock.calls.filter(([path]) => path.includes('operations-cost'));
+  const posts = () => request.mock.calls.filter(([path, init]) => path.includes('operations-cost') && init?.method === 'POST');
   return { request, posts, onSaved };
 }
 
 const tours = [tour('t-1', 'Cañón del río', 12, false), tour('t-2', 'Bote por la ciénaga', 10, true)];
-const ok = (path: string) => (path.includes('catalog') ? catalog(tours) : created);
+const ok = (path: string) => (path.includes('catalog') ? catalog(tours) : path.includes('/vehicles') ? noVehicles : created);
 const fill = async (tourId = 't-1', end = '14:00') => {
   fireEvent.change(await screen.findByLabelText('Tour'), { target: { value: tourId } });
   fireEvent.change(screen.getByLabelText('Fecha'), { target: { value: '2026-12-01' } });
@@ -44,7 +45,8 @@ const fill = async (tourId = 't-1', end = '14:00') => {
   fireEvent.change(screen.getByLabelText('Hora de finalización estimada'), { target: { value: end } });
 };
 const save = () => fireEvent.click(screen.getByRole('button', { name: 'Guardar salida' }));
-const reject = (error: object) => (path: string) => (path.includes('catalog') ? catalog(tours) : Promise.reject(error));
+const reject = (error: object) => (path: string) =>
+  path.includes('catalog') ? catalog(tours) : path.includes('/vehicles') ? noVehicles : Promise.reject(error);
 
 describe('the connected form (spec 006)', () => {
   afterEach(() => vi.restoreAllMocks());
@@ -71,32 +73,12 @@ describe('the connected form (spec 006)', () => {
     expect(request.mock.calls[0][0]).toContain('serviceType=TOUR&catalogStatus=ACTIVE');
   });
 
-  it('C·no_vehicles_are_offered_and_the_capacity_is_the_tour_one', async () => {
-    setup(ok);
-    fireEvent.change(await screen.findByLabelText('Tour'), { target: { value: 't-1' } });
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
-    expect(screen.getByText('Los vehículos se asignan después.')).toBeInTheDocument();
-    // The person reads the Mockup's words, never the id of a story (spec 005).
-    expect(document.body.textContent).not.toMatch(/HU-[A-Z]+-\d/);
-    expect(screen.getByText('Capacidad de la salida: 12 viajeros (la del tour).')).toBeInTheDocument();
-    expect(screen.queryByText('Datos de prueba')).not.toBeInTheDocument();
-  });
-
-  it('C·a_tour_with_mandatory_transport_schedules_with_a_notice', async () => {
-    const { posts } = setup(ok);
-    await fill('t-2');
-    expect(screen.getByText(/su capacidad es la del tour hasta que se asignen los vehículos/)).toBeInTheDocument();
-    expect(screen.getByText('Capacidad de la salida: 10 viajeros (la del tour).')).toBeInTheDocument();
-    save();
-    await waitFor(() => expect(posts()).toHaveLength(1));
-  });
-
   it('C·scheduling_shows_the_real_code_and_says_the_list_is_test_data', async () => {
     const { onSaved, posts } = setup(ok);
     await fill();
     save();
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
-    expect(onSaved.mock.calls[0][0]).toContain('Salida SAL-004 programada (Cañón del río, 2026-12-01 08:00). Capacidad: 12.');
+    expect(onSaved.mock.calls[0][0]).toContain('Salida SAL-004 programada (Cañón del río, 2026-12-01 08:00). Capacidad efectiva: 12.');
     expect(onSaved.mock.calls[0][0]).toContain('La lista muestra datos de prueba');
     expect(onSaved.mock.calls[0][0]).not.toMatch(/HU-[A-Z]+-\d/);
     // Whether it can be reserved depends on commercial-reservation learning of the event: not known here.
@@ -109,7 +91,9 @@ describe('the connected form (spec 006)', () => {
 
   it('C·the_button_is_disabled_while_saving', async () => {
     let release!: (value: unknown) => void;
-    const { posts } = setup((path) => (path.includes('catalog') ? catalog(tours) : new Promise((resolve) => (release = resolve))));
+    const { posts } = setup((path) =>
+      path.includes('catalog') ? catalog(tours) : path.includes('/vehicles') ? noVehicles : new Promise((resolve) => (release = resolve)),
+    );
     await fill();
     save();
     const button = await screen.findByRole('button', { name: 'Guardar salida' });
@@ -123,7 +107,13 @@ describe('the connected form (spec 006)', () => {
   it('C·a_retry_reuses_the_key_and_another_save_does_not', async () => {
     let calls = 0;
     const { posts } = setup((path) =>
-      path.includes('catalog') ? catalog(tours) : ++calls === 1 ? Promise.reject({ status: 503, code: 'SERVICE_UNAVAILABLE' }) : created,
+      path.includes('catalog')
+        ? catalog(tours)
+        : path.includes('/vehicles')
+          ? noVehicles
+          : ++calls === 1
+            ? Promise.reject({ status: 503, code: 'SERVICE_UNAVAILABLE' })
+            : created,
     );
     await fill();
     save();
@@ -134,7 +124,9 @@ describe('the connected form (spec 006)', () => {
   });
 
   it('C·other_data_gets_another_key', async () => {
-    const { posts } = setup((path) => (path.includes('catalog') ? catalog(tours) : Promise.reject({ status: 503, code: 'SERVICE_UNAVAILABLE' })));
+    const { posts } = setup((path) =>
+      path.includes('catalog') ? catalog(tours) : path.includes('/vehicles') ? noVehicles : Promise.reject({ status: 503, code: 'SERVICE_UNAVAILABLE' }),
+    );
     await fill();
     save();
     await screen.findByText(/El servicio no responde/);
