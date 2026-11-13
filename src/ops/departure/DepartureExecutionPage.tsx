@@ -3,6 +3,7 @@ import { useAsync } from '../useAsync';
 import { DeparturePanel } from './DeparturePanel';
 import type { DepartureExecutionGateway } from './gateway';
 import { FinishPanel } from './FinishPanel';
+import { AddVehiclesPanel } from './AddVehiclesPanel';
 import { HistoryPanel } from './HistoryPanel';
 import { NoveltiesPanel } from './NoveltiesPanel';
 import { ReservationsPanel } from './ReservationsPanel';
@@ -14,6 +15,7 @@ import { StartPanel } from './StartPanel';
 // Panels already drawn; each task adds its own entries (a panel the status asks for and not drawn yet is skipped).
 const DRAWN: Partial<Record<PanelId, ComponentType<PanelProps>>> = {
   departure: DeparturePanel,
+  vehicles: AddVehiclesPanel,
   start: StartPanel,
   reservations: ReservationsPanel,
   novelties: NoveltiesPanel,
@@ -26,11 +28,12 @@ interface Props {
   gateway: DepartureExecutionGateway;
   code: string;
   canManage: boolean;
+  canSchedule?: boolean;
   onBack: () => void;
 }
 
 // Page of the Mockup admin-registrar-ejecucion.html (spec 004): the whole life of one departure in one place.
-export function DepartureExecutionPage({ gateway, code, canManage, onBack }: Props) {
+export function DepartureExecutionPage({ gateway, code, canManage, canSchedule, onBack }: Props) {
   const load = useMemo(() => () => gateway.getDeparture(code), [gateway, code]);
   const { state, retry, set } = useAsync(load);
 
@@ -48,11 +51,11 @@ export function DepartureExecutionPage({ gateway, code, canManage, onBack }: Pro
   } else if (!state.data) body = <p className="operator-copy">No encontramos esta salida.</p>;
   else {
     const departure = state.data;
-    body = panelsFor(departure.status)
+    body = panelsFor(departure.status, departure.pendingRegularization)
       .filter((id) => !gateway.panels || gateway.panels.includes(id))
       .map((id) => {
         const Panel = DRAWN[id];
-        return Panel && <Panel key={id} departure={departure} gateway={gateway} canManage={canManage} onChanged={set} />;
+        return Panel && <Panel key={id} departure={departure} gateway={gateway} canManage={canManage} canSchedule={canSchedule} onChanged={set} />;
       });
   }
 
