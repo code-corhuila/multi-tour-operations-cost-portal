@@ -28,7 +28,14 @@ export function NoveltiesPanel({ departure, gateway, canManage, onChanged }: Pan
     if (Object.keys(next).length > 0) return;
     let updated: Departure | undefined;
     const ok = await submit(`${departure.code}|${reservationId}|${detail.trim()}|${emergency}|${affected}`, async (key) => {
-      updated = await gateway.registerNovelty({ code: departure.code, reservationId, detail: detail.trim(), emergency, affected: emergency ? count : undefined, key });
+      updated = await gateway.registerNovelty({
+        code: departure.code,
+        reservationId,
+        detail: detail.trim(),
+        emergency,
+        affected: emergency ? count : undefined,
+        key,
+      });
     });
     if (ok && updated) {
       setDetail('');
@@ -43,9 +50,9 @@ export function NoveltiesPanel({ departure, gateway, canManage, onChanged }: Pan
       <p className="operator-eyebrow">Novedades de ejecución</p>
       <h2 id="novelties-title">Novedades y emergencia personal del cliente</h2>
       <p className="operator-copy">
-        La emergencia personal no cancela la reserva ni genera devolución por sí misma: al registrarla, Multitour calcula de inmediato
-        el monto reembolsable con la política vigente del servicio. Si es $0, la reserva continúa hasta Finalizada; si es mayor que
-        $0, la devolución queda determinada y autorizada automáticamente, pendiente de ejecución en máximo 5 días hábiles.
+        La emergencia personal no cancela la reserva ni genera devolución por sí misma: al registrarla, Multitour calcula de inmediato el monto reembolsable con
+        la política vigente del servicio. Si es $0, la reserva continúa hasta Finalizada; si es mayor que $0, la devolución queda determinada y autorizada
+        automáticamente, pendiente de ejecución en máximo 5 días hábiles.
       </p>
       {canRecord && (
         <form className="operator-form-grid" onSubmit={send} noValidate>
@@ -77,8 +84,8 @@ export function NoveltiesPanel({ departure, gateway, canManage, onChanged }: Pan
           </div>
           <div>
             <label htmlFor="novelty-emergency">
-              <input id="novelty-emergency" type="checkbox" checked={emergency} disabled={locked} onChange={(e) => setEmergency(e.target.checked)} />{' '}
-              Emergencia personal del cliente (calcula el reembolso según la política vigente)
+              <input id="novelty-emergency" type="checkbox" checked={emergency} disabled={locked} onChange={(e) => setEmergency(e.target.checked)} /> Emergencia
+              personal del cliente (calcula el reembolso según la política vigente)
             </label>
           </div>
           {emergency && (
