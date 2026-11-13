@@ -8,9 +8,7 @@ const setup = (props: { admin?: boolean; manage?: boolean; gateway?: DeparturesG
   const gateway = props.gateway ?? createDeparturesFixture();
   const onOpen = vi.fn();
   const onSchedule = vi.fn();
-  render(
-    <DeparturesPage gateway={gateway} canSchedule={props.admin ?? true} canManage={props.manage ?? true} onOpen={onOpen} onSchedule={onSchedule} />,
-  );
+  render(<DeparturesPage gateway={gateway} canSchedule={props.admin ?? true} canManage={props.manage ?? true} onOpen={onOpen} onSchedule={onSchedule} />);
   return { gateway, onOpen, onSchedule };
 };
 
@@ -22,7 +20,9 @@ describe('departures list (spec 005)', () => {
     setup();
     expect(await screen.findByRole('heading', { name: 'Salidas' })).toBeInTheDocument();
     expect(screen.getByText('Datos de prueba')).toBeInTheDocument();
-    const headers = within(await screen.findByRole('table')).getAllByRole('columnheader').map((h) => h.textContent);
+    const headers = within(await screen.findByRole('table'))
+      .getAllByRole('columnheader')
+      .map((h) => h.textContent);
     expect(headers).toEqual(['Salida', 'Inicio programado', 'Fin estimado', 'Vehículos', 'Capacidad efectiva', 'Cupos apartados', 'Estado', 'Acciones']);
     const sal18 = await row('SAL-018');
     expect(within(sal18).getByText('Caminata al cañón del río')).toBeInTheDocument();

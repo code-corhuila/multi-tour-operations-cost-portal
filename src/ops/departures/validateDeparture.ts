@@ -45,7 +45,11 @@ export function validateDeparture(form: DepartureForm, { tours, vehicles, depart
 
   const editing = departures.find((d) => d.code === form.editingCode);
   if (tour && editing && chosen.length > 0) {
-    const capacity = effectiveCapacity(tour.capacity, chosen.map((v) => v.capacity), tour.needsTransport);
+    const capacity = effectiveCapacity(
+      tour.capacity,
+      chosen.map((v) => v.capacity),
+      tour.needsTransport,
+    );
     if (capacity < editing.booked) messages.push(`La capacidad efectiva (${capacity}) no puede ser menor que los cupos apartados (${editing.booked}).`);
   }
   return messages;

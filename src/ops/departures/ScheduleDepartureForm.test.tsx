@@ -31,7 +31,9 @@ describe('schedule departure form (spec 005)', () => {
     fireEvent.change(await screen.findByLabelText('Tour'), { target: { value: 'T-1' } });
     expect(screen.getByLabelText('Cupo del tour (viajeros)')).toHaveValue(12);
     fireEvent.click(screen.getByRole('checkbox', { name: /Bus Andino 01/ }));
-    expect(screen.getByText('Capacidad efectiva de la salida: 12 viajeros = menor entre el cupo del tour (12) y la capacidad acumulada de los vehículos (30)')).toBeInTheDocument();
+    expect(
+      screen.getByText('Capacidad efectiva de la salida: 12 viajeros = menor entre el cupo del tour (12) y la capacidad acumulada de los vehículos (30)'),
+    ).toBeInTheDocument();
   });
 
   it('U·occupied_vehicle_is_marked: the vehicle of an overlapping departure shows its code', async () => {
@@ -63,7 +65,9 @@ describe('schedule departure form (spec 005)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Guardar salida' }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
     expect(spy).toHaveBeenCalledTimes(1);
-    expect(onSaved.mock.calls[0][0]).toBe('Salida SAL-026 programada (Caminata al cañón del río, 2026-11-02 08:00). Capacidad efectiva: 12. Ya se puede reservar.');
+    expect(onSaved.mock.calls[0][0]).toBe(
+      'Salida SAL-026 programada (Caminata al cañón del río, 2026-11-02 08:00). Capacidad efectiva: 12. Ya se puede reservar.',
+    );
   });
 
   it('U·reserved_departure_locks_date_and_tour: editing SAL-018 (8 booked) locks them and says why', async () => {

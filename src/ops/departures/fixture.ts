@@ -17,8 +17,26 @@ const vehicles: Vehicle[] = [
 
 const seed = (): DepartureRow[] => [
   { code: 'SAL-018', tourId: 'T-1', start: '2026-10-18T08:00', end: '2026-10-18T14:00', vehicleIds: ['V-1'], booked: 8, reservations: 2, status: 'SCHEDULED' },
-  { code: 'SAL-021', tourId: 'T-2', start: '2026-10-14T07:00', end: '2026-10-14T13:00', vehicleIds: ['V-2'], booked: 6, reservations: 2, status: 'IN_EXECUTION' },
-  { code: 'SAL-014', tourId: 'T-1', start: '2026-10-10T08:00', end: '2026-10-10T14:00', vehicleIds: ['V-3'], booked: 9, reservations: 1, status: 'PENDING_REGULARIZATION' },
+  {
+    code: 'SAL-021',
+    tourId: 'T-2',
+    start: '2026-10-14T07:00',
+    end: '2026-10-14T13:00',
+    vehicleIds: ['V-2'],
+    booked: 6,
+    reservations: 2,
+    status: 'IN_EXECUTION',
+  },
+  {
+    code: 'SAL-014',
+    tourId: 'T-1',
+    start: '2026-10-10T08:00',
+    end: '2026-10-10T14:00',
+    vehicleIds: ['V-3'],
+    booked: 9,
+    reservations: 1,
+    status: 'PENDING_REGULARIZATION',
+  },
   { code: 'SAL-009', tourId: 'T-1', start: '2026-10-05T08:00', end: '2026-10-05T14:00', vehicleIds: ['V-1'], booked: 7, reservations: 1, status: 'FINISHED' },
   { code: 'SAL-003', tourId: 'T-2', start: '2026-10-02T08:00', end: '2026-10-02T14:00', vehicleIds: [], booked: 0, reservations: 0, status: 'CANCELLED' },
   { code: 'SAL-025', tourId: 'T-3', start: '2026-10-25T09:00', end: '2026-10-25T15:00', vehicleIds: [], booked: 0, reservations: 0, status: 'SCHEDULED' },

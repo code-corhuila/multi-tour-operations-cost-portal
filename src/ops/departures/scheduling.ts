@@ -39,7 +39,8 @@ export function createDeparturesGateway(apiClient: ApiClient, rest: DeparturesGa
       try {
         for (let page = 1; page <= MAX_PAGES; page++) {
           const answer = await apiClient.request<CatalogPage>(`${CATALOG}&page=${page}`);
-          for (const s of answer.data) tours.push({ id: s.serviceId, name: s.commercialName, capacity: s.configuredCapacity, needsTransport: s.transportRequired });
+          for (const s of answer.data)
+            tours.push({ id: s.serviceId, name: s.commercialName, capacity: s.configuredCapacity, needsTransport: s.transportRequired });
           if (page >= answer.meta.totalPages) break;
         }
       } catch (error) {
@@ -52,7 +53,12 @@ export function createDeparturesGateway(apiClient: ApiClient, rest: DeparturesGa
         const answer = await apiClient.request<{ code: string; status: DepartureRow['status']; booked: number }>('/api/v1/operations-cost/departures', {
           method: 'POST',
           headers: { 'Idempotency-Key': key },
-          body: { serviceId: tourId, scheduledStart: toInstant(start, TENANT_TIME_ZONE), scheduledEnd: toInstant(end, TENANT_TIME_ZONE), timeZone: TENANT_TIME_ZONE },
+          body: {
+            serviceId: tourId,
+            scheduledStart: toInstant(start, TENANT_TIME_ZONE),
+            scheduledEnd: toInstant(end, TENANT_TIME_ZONE),
+            timeZone: TENANT_TIME_ZONE,
+          },
         });
         return { code: answer.code, tourId, start, end, vehicleIds: [], booked: answer.booked, reservations: 0, status: answer.status };
       } catch (error) {

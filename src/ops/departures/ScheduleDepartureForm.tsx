@@ -27,7 +27,14 @@ function failure(error: unknown): { general: string[]; fields: Partial<Record<'t
     return Object.keys(fields).length > 0 ? { general: [], fields } : { general: ['Revisa los datos de la salida.'], fields };
   }
   if (error instanceof Refused) {
-    return { general: [error.code === 'INVALID_STATUS_TRANSITION' ? 'La salida ya no está en un estado que permita este cambio.' : 'El servicio no aceptó la salida: el tour no está disponible o la hora de inicio ya pasó.'], fields: {} };
+    return {
+      general: [
+        error.code === 'INVALID_STATUS_TRANSITION'
+          ? 'La salida ya no está en un estado que permita este cambio.'
+          : 'El servicio no aceptó la salida: el tour no está disponible o la hora de inicio ya pasó.',
+      ],
+      fields: {},
+    };
   }
   if (error instanceof Forbidden) return { general: ['No tienes permiso para programar salidas.'], fields: {} };
   if (error instanceof Unavailable) return { general: ['El servicio no responde. Tus datos siguen aquí; intenta de nuevo.'], fields: {} };
@@ -84,7 +91,13 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
   const current =
     form ??
     (editing
-      ? { tourId: editing.tourId, date: editing.start.slice(0, 10), start: editing.start.slice(11), end: editing.end.slice(11), vehicleIds: [...editing.vehicleIds] }
+      ? {
+          tourId: editing.tourId,
+          date: editing.start.slice(0, 10),
+          start: editing.start.slice(11),
+          end: editing.end.slice(11),
+          vehicleIds: [...editing.vehicleIds],
+        }
       : { tourId: '', date: '', start: '', end: '', vehicleIds: [] as string[] });
   const set = (patch: Partial<typeof current>) => setForm({ ...current, ...patch });
   // A departure with reservations keeps its date, hours and tour (RN-OPS-PT-56).
@@ -97,7 +110,16 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
     hasInterval
       ? departures.find((d) => d.code !== editCode && d.status !== 'CANCELLED' && d.vehicleIds.includes(vehicleId) && overlaps(interval(current), d))
       : undefined;
-  const capacity = tour && !withVehicles ? tour.capacity : tour ? effectiveCapacity(tour.capacity, chosen.map((v) => v.capacity), tour.needsTransport) : 0;
+  const capacity =
+    tour && !withVehicles
+      ? tour.capacity
+      : tour
+        ? effectiveCapacity(
+            tour.capacity,
+            chosen.map((v) => v.capacity),
+            tour.needsTransport,
+          )
+        : 0;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -118,7 +140,9 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
       const tail = editCode || !withVehicles ? '' : ' Ya se puede reservar.';
       const note = withVehicles ? '' : ' La lista muestra datos de prueba hasta que se conecte.';
       attempt.current = undefined;
-      onSaved(`Salida ${saved.code} ${verb} (${tour.name}, ${start.replace('T', ' ')}). ${withVehicles ? 'Capacidad efectiva' : 'Capacidad'}: ${capacity}.${tail}${note}`);
+      onSaved(
+        `Salida ${saved.code} ${verb} (${tour.name}, ${start.replace('T', ' ')}). ${withVehicles ? 'Capacidad efectiva' : 'Capacidad'}: ${capacity}.${tail}${note}`,
+      );
     } catch (error) {
       const { general, fields } = editCode ? { general: ['No pudimos guardar la salida. Tus datos siguen aquí.'], fields: {} } : failure(error);
       setMessages(general);
@@ -152,7 +176,14 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
           )}
           <div className="operator-form-grid">
             <label htmlFor="sch-tour">Tour</label>
-            <select id="sch-tour" aria-invalid={!!fieldErrors.tour} aria-describedby={fieldErrors.tour ? 'sch-tour-error' : undefined} value={current.tourId} disabled={locked} onChange={(e) => set({ tourId: e.target.value })}>
+            <select
+              id="sch-tour"
+              aria-invalid={!!fieldErrors.tour}
+              aria-describedby={fieldErrors.tour ? 'sch-tour-error' : undefined}
+              value={current.tourId}
+              disabled={locked}
+              onChange={(e) => set({ tourId: e.target.value })}
+            >
               <option value="">Selecciona un tour</option>
               {tours.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -164,10 +195,26 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
             <label htmlFor="sch-date">Fecha</label>
             <input id="sch-date" type="date" value={current.date} disabled={locked} onChange={(e) => set({ date: e.target.value })} />
             <label htmlFor="sch-start">Hora de inicio programada</label>
-            <input id="sch-start" type="time" aria-invalid={!!fieldErrors.start} aria-describedby={fieldErrors.start ? 'sch-start-error' : undefined} value={current.start} disabled={locked} onChange={(e) => set({ start: e.target.value })} />
+            <input
+              id="sch-start"
+              type="time"
+              aria-invalid={!!fieldErrors.start}
+              aria-describedby={fieldErrors.start ? 'sch-start-error' : undefined}
+              value={current.start}
+              disabled={locked}
+              onChange={(e) => set({ start: e.target.value })}
+            />
             <FieldMessage id="start" text={fieldErrors.start} />
             <label htmlFor="sch-end">Hora de finalización estimada</label>
-            <input id="sch-end" type="time" aria-invalid={!!fieldErrors.end} aria-describedby={fieldErrors.end ? 'sch-end-error' : undefined} value={current.end} disabled={locked} onChange={(e) => set({ end: e.target.value })} />
+            <input
+              id="sch-end"
+              type="time"
+              aria-invalid={!!fieldErrors.end}
+              aria-describedby={fieldErrors.end ? 'sch-end-error' : undefined}
+              value={current.end}
+              disabled={locked}
+              onChange={(e) => set({ end: e.target.value })}
+            />
             <FieldMessage id="end" text={fieldErrors.end} />
             <label htmlFor="sch-quota">Cupo del tour (viajeros)</label>
             <input id="sch-quota" type="number" value={tour ? tour.capacity : ''} readOnly />
@@ -177,29 +224,29 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
         </section>
 
         {withVehicles ? (
-        <section className="operator-panel" aria-labelledby="sch-02">
-          <p className="operator-eyebrow">02 · Vehículos asignados</p>
-          <h2 id="sch-02">Vehículos</h2>
-          <p className="operator-copy">Un vehículo no puede estar en dos salidas cuyos horarios se cruzan.</p>
-          {vehicles.map((v) => {
-            const other = busy(v.id);
-            return (
-              <label key={v.id} className="operator-copy">
-                <input
-                  type="checkbox"
-                  checked={current.vehicleIds.includes(v.id)}
-                  onChange={(e) => set({ vehicleIds: e.target.checked ? [...current.vehicleIds, v.id] : current.vehicleIds.filter((id) => id !== v.id) })}
-                />{' '}
-                {v.name} · {v.capacity} viajeros{other ? ` · ocupado en ${other.code}` : ''}
-              </label>
-            );
-          })}
-          <p className="operator-copy" aria-live="polite">
-            {tour && chosen.length > 0
-              ? `Capacidad efectiva de la salida: ${capacity} viajeros = menor entre el cupo del tour (${tour.capacity}) y la capacidad acumulada de los vehículos (${chosen.reduce((sum, v) => sum + v.capacity, 0)})`
-              : 'Selecciona un tour y vehículos para calcular la capacidad efectiva.'}
-          </p>
-        </section>
+          <section className="operator-panel" aria-labelledby="sch-02">
+            <p className="operator-eyebrow">02 · Vehículos asignados</p>
+            <h2 id="sch-02">Vehículos</h2>
+            <p className="operator-copy">Un vehículo no puede estar en dos salidas cuyos horarios se cruzan.</p>
+            {vehicles.map((v) => {
+              const other = busy(v.id);
+              return (
+                <label key={v.id} className="operator-copy">
+                  <input
+                    type="checkbox"
+                    checked={current.vehicleIds.includes(v.id)}
+                    onChange={(e) => set({ vehicleIds: e.target.checked ? [...current.vehicleIds, v.id] : current.vehicleIds.filter((id) => id !== v.id) })}
+                  />{' '}
+                  {v.name} · {v.capacity} viajeros{other ? ` · ocupado en ${other.code}` : ''}
+                </label>
+              );
+            })}
+            <p className="operator-copy" aria-live="polite">
+              {tour && chosen.length > 0
+                ? `Capacidad efectiva de la salida: ${capacity} viajeros = menor entre el cupo del tour (${tour.capacity}) y la capacidad acumulada de los vehículos (${chosen.reduce((sum, v) => sum + v.capacity, 0)})`
+                : 'Selecciona un tour y vehículos para calcular la capacidad efectiva.'}
+            </p>
+          </section>
         ) : (
           <section className="operator-panel" aria-labelledby="sch-02">
             <p className="operator-eyebrow">02 · Vehículos asignados</p>
