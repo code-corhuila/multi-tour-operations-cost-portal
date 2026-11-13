@@ -56,7 +56,9 @@ describe('regularization of a departure (RN-OPS-PT-38)', () => {
     send(p);
     expect(await within(p).findByText('Ingresa el motivo: el inicio real es anterior al programado.')).toBeInTheDocument();
     expect(spy).not.toHaveBeenCalled();
-    fireEvent.change(within(p).getByLabelText('Motivo si la hora real de inicio es anterior a la programada'), { target: { value: 'Salimos antes por lluvia' } });
+    fireEvent.change(within(p).getByLabelText('Motivo si la hora real de inicio es anterior a la programada'), {
+      target: { value: 'Salimos antes por lluvia' },
+    });
     send(p);
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Registrar lo ocurrido' })).not.toBeInTheDocument());
     expect(spy).toHaveBeenCalledTimes(1);

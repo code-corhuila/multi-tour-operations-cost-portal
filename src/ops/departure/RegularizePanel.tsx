@@ -34,7 +34,15 @@ export function RegularizePanel({ departure, gateway, canManage, onChanged }: Pa
     setErrors(next);
     if (Object.keys(next).length > 0 || !result) return;
     let updated: Departure | undefined;
-    const input = { code: departure.code, result, startedAt: start, finishedAt: end, earlyStartMotive: motive.trim(), interruption: interruption.trim(), notDoneCause: notDone.trim() };
+    const input = {
+      code: departure.code,
+      result,
+      startedAt: start,
+      finishedAt: end,
+      earlyStartMotive: motive.trim(),
+      interruption: interruption.trim(),
+      notDoneCause: notDone.trim(),
+    };
     const ok = await submit(`${departure.code}|${JSON.stringify(input)}`, async (key) => {
       updated = await gateway.registerRegularization({ ...input, key });
     });
@@ -60,9 +68,9 @@ export function RegularizePanel({ departure, gateway, canManage, onChanged }: Pa
       <p className="operator-eyebrow">Salida pendiente de regularización</p>
       <h2 id="regularize-title">Registrar lo ocurrido</h2>
       <p className="operator-copy">
-        La salida superó su hora de finalización estimada sin cierre. Registra la información real: ejecutada y finalizada,
-        interrumpida o no realizada (Cancelada). La hora programada sigue gobernando los plazos aunque la hora real reportada sea
-        anterior; en ese caso el motivo es obligatorio y queda auditado.
+        La salida superó su hora de finalización estimada sin cierre. Registra la información real: ejecutada y finalizada, interrumpida o no realizada
+        (Cancelada). La hora programada sigue gobernando los plazos aunque la hora real reportada sea anterior; en ese caso el motivo es obligatorio y queda
+        auditado.
       </p>
       <form className="operator-form-grid" onSubmit={send} noValidate>
         <div>

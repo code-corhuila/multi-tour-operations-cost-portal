@@ -54,9 +54,9 @@ export function ReservationsPanel({ departure, gateway, canManage, onChanged }: 
       <p className="operator-eyebrow">Reservas de la salida</p>
       <h2 id="reservations-title">Lo reservado y lo efectivamente prestado</h2>
       <p className="operator-copy">
-        Se registran los servicios prestados y no prestados con su causal obligatoria; la diferencia frente a la proyección inicial
-        permanece visible. Si una persona no se presenta y no hubo aviso oportuno, el guía puede conceder hasta 10 minutos antes de
-        iniciar; transcurridos, el servicio se mantiene cobrado. Una vez iniciada la salida no se permiten ajustes ordinarios.
+        Se registran los servicios prestados y no prestados con su causal obligatoria; la diferencia frente a la proyección inicial permanece visible. Si una
+        persona no se presenta y no hubo aviso oportuno, el guía puede conceder hasta 10 minutos antes de iniciar; transcurridos, el servicio se mantiene
+        cobrado. Una vez iniciada la salida no se permiten ajustes ordinarios.
       </p>
       {departure.reservations.length === 0 && <p className="operator-copy">Esta salida no tiene reservas.</p>}
       {departure.reservations.map((r) => {
@@ -121,7 +121,11 @@ export function ReservationsPanel({ departure, gateway, canManage, onChanged }: 
           </button>
         </div>
       )}
-      {saved && <p role="status" className="operator-form-feedback">Servicios guardados.</p>}
+      {saved && (
+        <p role="status" className="operator-form-feedback">
+          Servicios guardados.
+        </p>
+      )}
       {failed && (
         <div role="alert">
           <p className="operator-form-feedback is-error">No pudimos guardar los servicios. Tus datos siguen aquí.</p>

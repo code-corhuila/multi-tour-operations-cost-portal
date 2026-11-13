@@ -14,7 +14,11 @@ describe('operations page', () => {
   it('U·upcoming_panel_has_its_columns_and_the_right_action: only confirmed rows can register an execution', async () => {
     const { onRegister } = setup();
     const panel = (await screen.findByRole('heading', { name: 'Salidas por preparar' })).closest('section') as HTMLElement;
-    expect(within(panel).getAllByRole('columnheader').map((c) => c.textContent)).toEqual(['Fecha', 'Servicio', 'Reserva', 'Estado', 'Acción']);
+    expect(
+      within(panel)
+        .getAllByRole('columnheader')
+        .map((c) => c.textContent),
+    ).toEqual(['Fecha', 'Servicio', 'Reserva', 'Estado', 'Acción']);
     const buttons = within(panel).getAllByRole('button', { name: 'Registrar ejecución' });
     fireEvent.click(buttons[0]);
     expect(onRegister).toHaveBeenCalledWith('RES-1001');
@@ -25,9 +29,11 @@ describe('operations page', () => {
   it('U·executions_table_has_its_columns_and_finish_removes_the_action: nothing changes without the button', async () => {
     setup();
     const panel = (await screen.findByRole('heading', { name: 'Ejecuciones registradas' })).closest('section') as HTMLElement;
-    expect(within(panel).getAllByRole('columnheader').map((c) => c.textContent)).toEqual([
-      'Reserva', 'Fecha', 'Servicio', 'Reservado', 'Ejecutado', 'Causal', 'Estado', 'Responsable', 'Acción',
-    ]);
+    expect(
+      within(panel)
+        .getAllByRole('columnheader')
+        .map((c) => c.textContent),
+    ).toEqual(['Reserva', 'Fecha', 'Servicio', 'Reservado', 'Ejecutado', 'Causal', 'Estado', 'Responsable', 'Acción']);
     expect(within(panel).getByText('En curso')).toBeInTheDocument();
     fireEvent.click(within(panel).getByRole('button', { name: 'Finalizar ejecución' }));
     expect(await within(panel).findByText('Finalizada')).toBeInTheDocument();

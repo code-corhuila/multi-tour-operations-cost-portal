@@ -68,8 +68,8 @@ export function DepartureExecutionPage({ gateway, code, canManage, onBack }: Pro
       <p className="operator-eyebrow">Datos de prueba</p>
       {!canManage && (
         <p className="operator-access-note">
-          Tu usuario no tiene el permiso Gestionar ejecución de salidas: puedes consultar la salida, pero no registrar inicio,
-          finalización, novedades ni regularizaciones.
+          Tu usuario no tiene el permiso Gestionar ejecución de salidas: puedes consultar la salida, pero no registrar inicio, finalización, novedades ni
+          regularizaciones.
         </p>
       )}
       {body}

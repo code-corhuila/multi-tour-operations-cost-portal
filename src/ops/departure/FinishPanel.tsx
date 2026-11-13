@@ -31,10 +31,9 @@ export function FinishPanel({ departure, gateway, canManage, onChanged }: PanelP
       <p className="operator-eyebrow">Finalización</p>
       <h2 id="finish-title">Registrar la finalización o la interrupción</h2>
       <p className="operator-copy">
-        El cierre es de la salida: al registrar la finalización, las reservas En ejecución pasan automáticamente a Finalizada. Una
-        salida interrumpida termina en Finalizada con la interrupción registrada y sus reservas se gestionan con la reprogramación
-        (24 horas para proponer, regreso excepcional a Confirmada si el cliente acepta) o la devolución del 100 %. Si la salida superó
-        su hora estimada, este registro también la regulariza.
+        El cierre es de la salida: al registrar la finalización, las reservas En ejecución pasan automáticamente a Finalizada. Una salida interrumpida termina
+        en Finalizada con la interrupción registrada y sus reservas se gestionan con la reprogramación (24 horas para proponer, regreso excepcional a Confirmada
+        si el cliente acepta) o la devolución del 100 %. Si la salida superó su hora estimada, este registro también la regulariza.
       </p>
       <form className="operator-form-grid" onSubmit={send} noValidate>
         <div>
