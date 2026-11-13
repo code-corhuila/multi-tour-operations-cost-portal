@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Departure, ReservationService, ReservationState, ServiceResult, ServicesInput } from './gateway';
 import { ExtraordinaryCancellationForm } from './ExtraordinaryCancellationForm';
+import { PersonalEmergencyForm } from './PersonalEmergencyForm';
 import type { PanelProps } from './panelProps';
 import { showTime } from './panelProps';
 import { useRegistration } from './useRegistration';
@@ -33,6 +34,10 @@ const initialRow = (r: ReservationService): Row => ({
   noShow: r.noShow ?? false,
 });
 
+// The personal emergency recorded for a reservation, if there is one (HU-OPS-008): it does not change the state of the reservation.
+const emergencyOf = (departure: PanelProps['departure'], reservationId: string) =>
+  departure.novelties.find((n) => n.type === 'Emergencia personal' && n.reservationId === reservationId);
+
 // Panel "Reservas de la salida": the reserved numbers stay visible next to what was delivered (RN-OPS-PT-34, -35).
 export function ReservationsPanel({ departure, gateway, canManage, onChanged }: PanelProps) {
   // only the rows the person edited are kept here; the rest start from what the departure says
@@ -43,13 +48,17 @@ export function ReservationsPanel({ departure, gateway, canManage, onChanged }: 
   const [rereadFailed, setRereadFailed] = useState(false);
   // the reservation whose extraordinary cancellation form is open (spec 012)
   const [cancelling, setCancelling] = useState<string>();
-  // the reservation whose action gets the focus back when its form is closed
+  // the reservation whose personal emergency form is open (spec 014); only one of the two forms is open at a time
+  const [reporting, setReporting] = useState<string>();
+  // a form of the panel has a send pending: no other form is opened over it, or its answer would be lost
+  const [formBusy, setFormBusy] = useState(false);
+  // the action that gets the focus back when its form is closed
   const [returnFocus, setReturnFocus] = useState<string>();
   useEffect(() => {
-    if (returnFocus === undefined || cancelling !== undefined) return;
-    document.getElementById(`open-cancellation-${returnFocus}`)?.focus();
+    if (returnFocus === undefined || cancelling !== undefined || reporting !== undefined) return;
+    document.getElementById(returnFocus)?.focus();
     setReturnFocus(undefined);
-  }, [returnFocus, cancelling]);
+  }, [returnFocus, cancelling, reporting]);
   const { sending, failed, submit } = useRegistration();
   const editable = departure.status === 'IN_EXECUTION';
   const locked = !canManage || sending;
@@ -125,6 +134,7 @@ export function ReservationsPanel({ departure, gateway, canManage, onChanged }: 
         const row = rowOf(r);
         const rowErrors = errors[r.reservationId] ?? {};
         const rowEditable = editable && r.state === 'IN_EXECUTION';
+        const emergency = emergencyOf(departure, r.reservationId);
         const executed = r.travelersServed ?? (r.result === 'DELIVERED' ? r.travelers : 0);
         return (
           <article key={r.reservationId} className="operator-form-wide">
@@ -222,13 +232,14 @@ export function ReservationsPanel({ departure, gateway, canManage, onChanged }: 
                   code={departure.code}
                   reservation={r}
                   record={(input) => gateway.recordExtraordinaryCancellation(input)}
+                  onBusy={setFormBusy}
                   onDone={(updated) => {
                     setCancelling(undefined);
                     onChanged(updated);
                   }}
                   onClose={() => {
                     setCancelling(undefined);
-                    setReturnFocus(r.reservationId);
+                    setReturnFocus(`open-cancellation-${r.reservationId}`);
                   }}
                 />
               ) : (
@@ -236,10 +247,58 @@ export function ReservationsPanel({ departure, gateway, canManage, onChanged }: 
                   id={`open-cancellation-${r.reservationId}`}
                   type="button"
                   className="operator-outline"
-                  disabled={sending}
-                  onClick={() => setCancelling(r.reservationId)}
+                  disabled={sending || formBusy}
+                  onClick={() => {
+                    setReporting(undefined);
+                    setCancelling(r.reservationId);
+                  }}
                 >
                   Cancelación extraordinaria
+                </button>
+              ))}
+            {emergency && (
+              <div role="group" aria-label={`Emergencia personal de ${r.customer}`}>
+                <p className="operator-copy">
+                  {`Emergencia personal: ${emergency.detail}`}
+                  {emergency.affected === undefined ? '' : ` · ${emergency.affected} ${emergency.affected === 1 ? 'viajero' : 'viajeros'}`}
+                  {` · ${showTime(emergency.at)} · cuenta ${emergency.who}`}
+                </p>
+                {r.state === 'IN_EXECUTION' && !r.extraordinaryCancellation && (
+                  <p className="operator-copy">La reserva sigue en ejecución; el reembolso que corresponda lo determina el sistema.</p>
+                )}
+              </div>
+            )}
+            {canManage &&
+              rowEditable &&
+              !r.extraordinaryCancellation &&
+              !emergency &&
+              (reporting === r.reservationId ? (
+                <PersonalEmergencyForm
+                  code={departure.code}
+                  reservation={r}
+                  record={(input) => gateway.registerNovelty({ ...input, emergency: true })}
+                  onBusy={setFormBusy}
+                  onDone={(updated) => {
+                    setReporting(undefined);
+                    onChanged(updated);
+                  }}
+                  onClose={() => {
+                    setReporting(undefined);
+                    setReturnFocus(`open-emergency-${r.reservationId}`);
+                  }}
+                />
+              ) : (
+                <button
+                  id={`open-emergency-${r.reservationId}`}
+                  type="button"
+                  className="operator-outline"
+                  disabled={sending || formBusy}
+                  onClick={() => {
+                    setCancelling(undefined);
+                    setReporting(r.reservationId);
+                  }}
+                >
+                  Emergencia personal
                 </button>
               ))}
             {r.result && (
