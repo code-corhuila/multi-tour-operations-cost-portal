@@ -118,6 +118,41 @@ describe('the connected execution gateway', () => {
     expect(calls).toHaveLength(0);
   });
 
+  it('C·the_vehicles_of_the_tenant_are_read_page_by_page_and_the_departure_says_which_it_has_and_whether_its_tour_needs_transport', async () => {
+    const { client, calls } = fakeClient((call) =>
+      call.path.includes('/vehicles')
+        ? { data: [{ vehicleId: 'veh-1', name: 'Van', capacity: 12 }, { vehicleId: 'veh-2', name: 'Bus', capacity: 30 }], meta: { totalPages: 1 } }
+        : departure({ transportRequired: true }),
+    );
+    const gateway = createExecutionGateway(client);
+    expect(await gateway.listVehicles!()).toEqual([
+      { id: 'veh-1', name: 'Van', capacity: 12 },
+      { id: 'veh-2', name: 'Bus', capacity: 30 },
+    ]);
+    expect(calls[0].path).toBe('/api/v1/operations-cost/vehicles?limit=100&page=1');
+    expect(await gateway.getDeparture('SAL-031')).toMatchObject({ transportRequired: true, vehicleIds: ['veh-1'] });
+  });
+
+  it('C·adding_vehicles_posts_the_ids_to_the_departure_and_answers_the_departure', async () => {
+    const { client, calls } = fakeClient(() => departure({ capacity: 18, vehicles: [{ vehicleId: 'veh-1', name: 'Van', capacity: 12 }, { vehicleId: 'veh-2', name: 'Bus', capacity: 30 }] }));
+    const read = await createExecutionGateway(client).addVehicles!({ code: 'SAL-031', vehicleIds: ['veh-2'], key: 'vehicles-key-1' });
+    expect(calls).toEqual([
+      {
+        path: '/api/v1/operations-cost/departures/SAL-031/vehicles',
+        init: { method: 'POST', headers: { 'Idempotency-Key': 'vehicles-key-1' }, body: { vehicleIds: ['veh-2'] } },
+      },
+    ]);
+    expect(read).toMatchObject({ capacity: 18, vehicles: ['Van', 'Bus'], vehicleIds: ['veh-1', 'veh-2'] });
+  });
+
+  it('C·a_refused_addition_is_translated_by_its_status', async () => {
+    const add = { code: 'SAL-031', vehicleIds: ['veh-2'], key: 'vehicles-key-1' };
+    await expect(failing({ status: 422, code: 'BUSINESS_RULE_VIOLATION' }).addVehicles!(add)).rejects.toBeInstanceOf(Refused);
+    await expect(failing({ status: 403 }).addVehicles!(add)).rejects.toBeInstanceOf(Forbidden);
+    await expect(failing({ status: 503 }).addVehicles!(add)).rejects.toBeInstanceOf(Unavailable);
+    await expect(failing({ status: 400 }).addVehicles!(add)).rejects.toBeInstanceOf(FieldError);
+  });
+
   it('C·a_departure_that_is_not_there_resolves_undefined', async () => {
     expect(await failing({ status: 404, code: 'NOT_FOUND' }).getDeparture('SAL-404')).toBeUndefined();
   });
@@ -128,10 +163,10 @@ describe('the connected execution gateway', () => {
     await expect(failing({ status: 500 }).getDeparture('SAL-031')).rejects.toBeInstanceOf(Failed);
   });
 
-  it('U·it_says_it_talks_to_the_service_and_offers_the_departure_the_start_and_the_finish', () => {
+  it('U·it_says_it_talks_to_the_service_and_offers_the_departure_the_start_the_finish_and_the_regularization', () => {
     const gateway = createExecutionGateway(fakeClient(() => departure()).client);
     expect(gateway.connected).toBe(true);
-    expect(gateway.panels).toEqual(['departure', 'start', 'finish']);
+    expect(gateway.panels).toEqual(['departure', 'vehicles', 'start', 'finish', 'regularize']);
   });
 
   it('U·what_the_service_does_not_offer_yet_is_refused_and_never_sent', async () => {
@@ -139,7 +174,7 @@ describe('the connected execution gateway', () => {
     const gateway = createExecutionGateway(client);
     await expect(gateway.registerNovelty({ code: 'SAL-031', reservationId: 'r', detail: 'd', emergency: false, key: 'k' })).rejects.toThrow('NOT_AVAILABLE');
     await expect(gateway.registerServices({ code: 'SAL-031', entries: [], key: 'k' })).rejects.toThrow('NOT_AVAILABLE');
-    await expect(gateway.registerRegularization({ code: 'SAL-031', result: 'EXECUTED', startedAt: '', finishedAt: '', earlyStartMotive: '', interruption: '', notDoneCause: '', key: 'k' })).rejects.toThrow('NOT_AVAILABLE');
+    await expect(gateway.registerRegularization({ code: 'SAL-031', result: 'NOT_DONE', startedAt: '', finishedAt: '', earlyStartMotive: '', interruption: '', notDoneCause: 'Rain', key: 'k' })).rejects.toThrow('NOT_AVAILABLE');
     expect(calls).toHaveLength(0);
   });
 });

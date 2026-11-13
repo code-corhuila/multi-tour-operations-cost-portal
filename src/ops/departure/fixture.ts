@@ -50,17 +50,17 @@ const seed = (): Departure[] => [
   },
   {
     code: 'SAL-014',
-    status: 'PENDING_REGULARIZATION',
+    status: 'SCHEDULED',
+    pendingRegularization: true,
     vehicles: ['Van VAN-101'],
     capacity: 12,
     booked: 9,
     scheduledStart: '2026-10-10T08:00',
     scheduledEnd: '2026-10-10T14:00',
-    actualStart: '2026-10-10T08:00',
-    mark: 'Sin cierre',
-    reservations: [reservation('RES-0990', 'Cliente de prueba', 9, 'IN_EXECUTION')],
+    mark: 'Pendiente de regularización',
+    reservations: [reservation('RES-0990', 'Cliente de prueba', 9, 'ELIGIBLE')],
     novelties: [],
-    history: [log('2026-10-10T08:00', 'Inicio de la salida', 'Inicio real 2026-10-10 08:00')],
+    history: [log('2026-10-09T09:00', 'Salida programada', 'Creada con 9 viajeros')],
   },
   {
     code: 'SAL-009',
@@ -189,7 +189,7 @@ export function createDepartureFixture(): DepartureExecutionGateway {
         key,
         () => {
           const d = find(code);
-          if (d.status !== 'IN_EXECUTION' && d.status !== 'PENDING_REGULARIZATION') throw new Error('INVALID_STATUS_TRANSITION');
+          if (d.status !== 'IN_EXECUTION') throw new Error('INVALID_STATUS_TRANSITION');
           if (result === 'INTERRUPTED' && !cause.trim()) throw new Error('VALIDATION_ERROR');
           d.status = 'FINISHED';
           d.actualEnd = finishedAt;
@@ -206,7 +206,8 @@ export function createDepartureFixture(): DepartureExecutionGateway {
         input.key,
         () => {
           const d = find(input.code);
-          if (d.status !== 'PENDING_REGULARIZATION') throw new Error('INVALID_STATUS_TRANSITION');
+          if (d.status !== 'SCHEDULED' || !d.pendingRegularization) throw new Error('INVALID_STATUS_TRANSITION');
+          d.pendingRegularization = false;
           const notDone = input.result === 'NOT_DONE';
           d.status = notDone ? 'CANCELLED' : 'FINISHED';
           d.mark = notDone ? 'No realizada' : input.result === 'INTERRUPTED' ? 'Finalizada con interrupción' : 'Cerrada';

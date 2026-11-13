@@ -1,8 +1,9 @@
 // Port of the departure execution page (spec 004 plan D-02). Two adapters: the test data (`fixture.ts`) and the one that talks to the
 // operations-cost service (`execution.ts`, spec 008), which serves only the panels the service can back.
+import type { Vehicle } from '../departures/model';
 import type { PanelId } from './panels';
 
-export type DepartureStatus = 'SCHEDULED' | 'IN_EXECUTION' | 'PENDING_REGULARIZATION' | 'FINISHED' | 'CANCELLED';
+export type DepartureStatus = 'SCHEDULED' | 'IN_EXECUTION' | 'FINISHED' | 'CANCELLED';
 
 export interface HistoryEntry {
   at: string;
@@ -46,8 +47,15 @@ export interface Departure {
   actualStart?: string;
   actualEnd?: string;
   mark: string;
+  // Since contract 0.6.0 the service says both: the mark of a departure past its estimated end with no closing (it is not a state),
+  // and the alert of a scheduled departure whose start passed. The test data may leave them out.
+  pendingRegularization?: boolean;
+  startAlert?: boolean;
   // Present only for a departure that ended as an interruption (PDR K1).
   interruptionCause?: string;
+  // What the service says of the tour and of the vehicles that are on the departure; the test data leave them out.
+  transportRequired?: boolean;
+  vehicleIds?: string[];
   reservations: ReservationService[];
   novelties: Novelty[];
   history: HistoryEntry[];
@@ -96,6 +104,12 @@ export interface RegularizationInput {
   key: string;
 }
 
+export interface AddVehiclesInput {
+  code: string;
+  vehicleIds: string[];
+  key: string;
+}
+
 export interface DepartureExecutionGateway {
   // True for the adapter that talks to the service; absent for the test data.
   connected?: boolean;
@@ -108,4 +122,7 @@ export interface DepartureExecutionGateway {
   registerNovelty(input: NoveltyInput): Promise<Departure>;
   registerFinish(input: FinishInput): Promise<Departure>;
   registerRegularization(input: RegularizationInput): Promise<Departure>;
+  // Only the adapter of the service has them: the vehicles of the tenant, and adding some to a scheduled departure (HU-OPS-002).
+  listVehicles?(): Promise<Vehicle[]>;
+  addVehicles?(input: AddVehiclesInput): Promise<Departure>;
 }

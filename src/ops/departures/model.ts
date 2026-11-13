@@ -1,7 +1,7 @@
 // Port of the screens "Salidas" and "Programar salida" to the operations-cost service (spec 005 plan D-01). Two adapters:
 // the test data (`fixture.ts`) answers everything, and `scheduling.ts` answers the tours and the scheduling of a new
 // departure from the service (spec 006); the list, the edit and the cancellation have no route yet (HU-OPS-003, HU-OPS-006).
-export type DepartureStatus = 'SCHEDULED' | 'IN_EXECUTION' | 'PENDING_REGULARIZATION' | 'FINISHED' | 'CANCELLED';
+export type DepartureStatus = 'SCHEDULED' | 'IN_EXECUTION' | 'FINISHED' | 'CANCELLED';
 
 export interface Tour {
   id: string;
@@ -26,6 +26,10 @@ export interface DepartureRow {
   booked: number;
   reservations: number;
   status: DepartureStatus;
+  // What the service says since contract 0.6.0: the mark of a departure past its estimated end with no closing, and the alert of a
+  // scheduled one whose start passed. The test data may leave them out.
+  pendingRegularization?: boolean;
+  startAlert?: boolean;
   // The effective capacity the service answers; the test data leave it out and the page computes it.
   capacity?: number;
 }

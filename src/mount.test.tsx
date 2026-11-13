@@ -186,6 +186,30 @@ describe('operations portal mount (RN-OPS-PT-01)', () => {
     unmount();
   });
 
+  it('C·only_the_administrator_is_offered_to_add_vehicles_on_the_page_of_a_departure', async () => {
+    for (const [role, offered] of [['TENANT_ADMINISTRATOR', true], ['OPERATIONAL_COLLABORATOR', false]] as const) {
+      const apiClient = {
+        request: vi.fn(async (path: string) =>
+          path.includes('/vehicles?')
+            ? noVehicles
+            : path.startsWith('/api/v1/operations-cost/departures?')
+              ? listed
+              : path.includes('catalog')
+                ? catalog
+                : { ...created, serviceId: 'svc-1', transportRequired: true, pendingRegularization: false, interrupted: false, vehicles: [] },
+        ) as unknown as ApiClient['request'] & ReturnType<typeof vi.fn>,
+      };
+      const element = document.createElement('div');
+      document.body.appendChild(element);
+      const unmount = mount(element, { ...props([role], apiClient), area: 'departures' });
+      fireEvent.click(await within(element).findByRole('button', { name: 'Registrar ejecución' }));
+      expect(await within(element).findByRole('heading', { name: 'SAL-031' })).toBeInTheDocument();
+      if (offered) expect(await within(element).findByRole('heading', { name: 'Agregar vehículos' })).toBeInTheDocument();
+      else expect(within(element).queryByRole('heading', { name: 'Agregar vehículos' })).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+
   it('C·without_the_permission_the_departures_are_not_offered_even_to_the_administrator', async () => {
     const apiClient = { request: request() };
     const element = document.createElement('div');

@@ -171,6 +171,7 @@ const row = (n: number, extra: Record<string, unknown> = {}) => ({
   capacity: 12,
   booked: 4,
   pendingRegularization: false,
+  startAlert: false,
   interrupted: false,
   vehicles: [{ vehicleId: 'veh-1', name: 'Van', capacity: 12 }],
   ...extra,
@@ -184,8 +185,8 @@ describe('the list of departures (spec 008 PT8-01)', () => {
     expect(calls).toHaveLength(1);
     expect(calls[0].path).toBe('/api/v1/operations-cost/departures?limit=100&page=1');
     expect(rows).toEqual([
-      { code: 'SAL-021', tourId: 'id-21', start: '2026-12-01T08:00', end: '2026-12-01T16:00', vehicleIds: ['veh-1'], booked: 4, reservations: 0, status: 'SCHEDULED', capacity: 12 },
-      { code: 'SAL-022', tourId: 'id-22', start: '2026-12-01T08:00', end: '2026-12-01T16:00', vehicleIds: [], booked: 4, reservations: 0, status: 'IN_EXECUTION', capacity: 12 },
+      { code: 'SAL-021', tourId: 'id-21', start: '2026-12-01T08:00', end: '2026-12-01T16:00', vehicleIds: ['veh-1'], booked: 4, reservations: 0, status: 'SCHEDULED', pendingRegularization: false, startAlert: false, capacity: 12 },
+      { code: 'SAL-022', tourId: 'id-22', start: '2026-12-01T08:00', end: '2026-12-01T16:00', vehicleIds: [], booked: 4, reservations: 0, status: 'IN_EXECUTION', pendingRegularization: false, startAlert: false, capacity: 12 },
     ]);
   });
 

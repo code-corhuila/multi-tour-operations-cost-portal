@@ -71,6 +71,7 @@ function App({ session, area: areaProp, initialParams, apiClient }: MountProps) 
   const scheduling = useMemo(() => createDeparturesGateway(apiClient, testDepartures), [apiClient, testDepartures]);
   const execution = useMemo(() => createExecutionGateway(apiClient), [apiClient]);
   const canManage = (session.permissions ?? []).includes(MANAGE_DEPARTURE_EXECUTION);
+  const canSchedule = session.roles.some((role) => SCHEDULE_ROLES.includes(role));
   if (!session.roles.some((role) => OPERATOR_ROLES.includes(role))) {
     return (
       <p role="alert" className="operator-copy">
@@ -85,6 +86,7 @@ function App({ session, area: areaProp, initialParams, apiClient }: MountProps) 
         gateway={departure.real ? execution : fixture!.gateway}
         code={departure.code}
         canManage={canManage}
+        canSchedule={canSchedule}
         onBack={() => setDeparture(undefined)}
       />
     );
@@ -98,8 +100,6 @@ function App({ session, area: areaProp, initialParams, apiClient }: MountProps) 
       );
     }
     if (import.meta.env.DEV && !fixture) return <p role="status">Cargando…</p>;
-    const roles = session.roles;
-    const canSchedule = roles.some((role) => SCHEDULE_ROLES.includes(role));
     // Only the Administrator reaches the form; anyone else keeps the list (RN-OPS-PT-58).
     if (form && canSchedule) {
       return (

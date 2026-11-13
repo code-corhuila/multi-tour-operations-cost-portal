@@ -5,6 +5,8 @@ export interface PanelProps {
   departure: Departure;
   gateway: DepartureExecutionGateway;
   canManage: boolean;
+  // Only the Administrator schedules and gives vehicles to a departure (RN-OPS-PT-58).
+  canSchedule?: boolean;
   onChanged: (departure: Departure) => void;
 }
 
