@@ -32,6 +32,13 @@ describe('the personal emergency on the test data', () => {
     expect((await gateway.getDeparture('SAL-021'))?.novelties).toHaveLength(0);
   });
 
+  it('U·the_limits_are_inclusive_and_the_emergency_enters_the_history', async () => {
+    const gateway = createDepartureFixture();
+    const answered = await gateway.registerNovelty(emergency('SAL-021', 'RES-1002', { affected: 4, detail: 'd'.repeat(1000) }));
+    expect(answered.novelties[0]).toMatchObject({ affected: 4 });
+    expect(answered.history.at(-1)).toMatchObject({ action: 'Emergencia personal' });
+  });
+
   it('U·a_reservation_has_one_emergency_and_only_a_departure_in_execution_takes_one', async () => {
     const gateway = createDepartureFixture();
     await gateway.registerNovelty(emergency('SAL-021', 'RES-1002'));
