@@ -9,12 +9,19 @@ const STATUS: Record<DepartureStatus, { label: string; className: string }> = {
   CANCELLED: { label: 'Cancelada', className: 'operator-status is-failed' },
 };
 
+const reserved = (d: PanelProps['departure']) =>
+  d.reservations.filter((r) => r.state === 'IN_EXECUTION' || r.state === 'FINISHED').reduce((sum, r) => sum + r.travelers, 0);
+
 // Panel "Salida" of the Mockup: the data of the departure, read only.
 export function DeparturePanel({ departure }: PanelProps) {
   const status = STATUS[departure.status];
   const items: [string, string][] = [
     ['Vehículos asignados', departure.vehicles.length ? departure.vehicles.join(', ') : '—'],
     ['Capacidad y cupos', `${departure.capacity} cupos · ${departure.booked} reservados`],
+    // the real base: the travelers served out of those reserved by the reservations that run or ran (AC-PT-10.4)
+    ...(departure.travelersServed === undefined || departure.reservationsUnavailable
+      ? []
+      : ([['Atendidos', `${departure.travelersServed} de ${reserved(departure)} reservados`]] as [string, string][])),
     ['Inicio real', showTime(departure.actualStart)],
     ['Finalización real', showTime(departure.actualEnd)],
     // the badge already says that the departure is pending regularization: it is not said twice

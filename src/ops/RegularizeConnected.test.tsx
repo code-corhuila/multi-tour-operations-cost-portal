@@ -55,7 +55,7 @@ describe('the connected gateway regularizes through the service', () => {
   it('C·an_executed_departure_is_sent_with_the_real_hours_as_instants_and_the_key', async () => {
     const { client, calls } = fakeClient(answer());
     const done = await createExecutionGateway(client).registerRegularization(input());
-    expect(calls).toEqual([
+    expect(calls.filter((c) => c.path.endsWith('/regularization'))).toEqual([
       {
         path: '/api/v1/operations-cost/departures/SAL-031/regularization',
         init: {

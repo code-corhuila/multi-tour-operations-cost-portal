@@ -19,10 +19,14 @@ export type ServiceResult = 'DELIVERED' | 'NOT_DELIVERED';
 export interface ReservationService {
   reservationId: string;
   customer: string;
-  service: string;
+  // The service of the tour; the test data have it and the service does not send it.
+  service?: string;
   travelers: number;
   state: ReservationState;
   result?: ServiceResult;
+  // Since contract 0.7.0 the travelers served and the no-show are recorded next to the reserved ones.
+  travelersServed?: number;
+  noShow?: boolean;
   cause?: string;
 }
 
@@ -57,6 +61,10 @@ export interface Departure {
   transportRequired?: boolean;
   vehicleIds?: string[];
   reservations: ReservationService[];
+  // The real base: the travelers served of the delivered reservations; absent when the reservations could not be read.
+  travelersServed?: number;
+  // True when the service answered the departure without its reservations because it could not read them (api 006 D-04).
+  reservationsUnavailable?: boolean;
   novelties: Novelty[];
   history: HistoryEntry[];
 }
@@ -69,7 +77,7 @@ export interface StartInput {
 
 export interface ServicesInput {
   code: string;
-  entries: { reservationId: string; result: ServiceResult; cause: string }[];
+  entries: { reservationId: string; result: ServiceResult; travelersServed: number; noShow: boolean; cause: string }[];
   key: string;
 }
 
