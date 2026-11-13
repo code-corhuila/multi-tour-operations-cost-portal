@@ -5,7 +5,8 @@ import { TENANT_TIME_ZONE, fromInstant, toInstant } from '../departures/time';
 import type { CancellationCause, CostLine, CostSheet, Departure, DepartureExecutionGateway, DepartureStatus, ReservationState, ServiceResult } from './gateway';
 
 // The adapter of the page of a departure to the operations-cost service (spec 008 plan D-02). Only what the service offers is
-// served: reading a departure, adding vehicles to it, recording its start and recording its end or interruption. What it does not offer yet is refused
+// served: reading a departure, adding vehicles to it, the start, the end or interruption, the services, the regularization, the costs, the
+// cancellation and the personal emergency (not the ordinary novelty). What it does not offer yet is refused
 // here and never sent; its panels are not drawn (D-03).
 interface DepartureAnswer {
   code: string;
@@ -23,6 +24,8 @@ interface DepartureAnswer {
   transportRequired?: boolean;
   vehicles: { vehicleId: string; name: string }[];
   cancellation?: { cancelledAt: string; cancelledBy?: string; cause: CancellationCause; reason?: string };
+  // Since contract 0.12.0 (HU-OPS-008): the personal emergencies of the departure.
+  novelties?: { at: string; type: 'NOVELTY' | 'PERSONAL_EMERGENCY'; detail: string; who: string; reservationId: string; affected?: number }[];
   // Present only when the service could read the reservations of the departure (contract 0.7.0).
   travelersServed?: number;
   reservations?: {
@@ -92,7 +95,14 @@ function asDeparture(d: DepartureAnswer): Departure {
           },
         }
       : {}),
-    novelties: [],
+    novelties: (d.novelties ?? []).map((n) => ({
+      at: fromInstant(n.at, TENANT_TIME_ZONE),
+      type: n.type === 'PERSONAL_EMERGENCY' ? 'Emergencia personal' : 'Novedad',
+      detail: n.detail,
+      who: n.who,
+      reservationId: n.reservationId,
+      ...(n.affected === undefined ? {} : { affected: n.affected }),
+    })),
     history: [],
   };
 }
@@ -165,7 +175,16 @@ export function createExecutionGateway(apiClient: ApiClient): DepartureExecution
         })),
       }));
     },
-    registerNovelty: notAvailable,
+    async registerNovelty({ code, reservationId, detail, emergency, affected, key }) {
+      // The service offers only the personal emergency (HU-OPS-008): the ordinary novelty is refused here and never sent.
+      if (!emergency) return notAvailable();
+      return record(`${DEPARTURES}/${encodeURIComponent(code)}/novelties`, key, () => ({
+        reservationId,
+        type: 'PERSONAL_EMERGENCY',
+        detail: detail.trim(),
+        affected,
+      }));
+    },
     async recordExtraordinaryCancellation({ code, reservationId, justification, key }) {
       return record(`${DEPARTURES}/${encodeURIComponent(code)}/reservations/${encodeURIComponent(reservationId)}/extraordinary-cancellation`, key, () => ({
         justification: justification.trim(),
