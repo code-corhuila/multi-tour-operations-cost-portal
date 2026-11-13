@@ -5,6 +5,7 @@ import { createFixtureGateway } from './ops/fixtureGateway';
 import { DepartureExecutionPage } from './ops/departure/DepartureExecutionPage';
 import { DeparturesPage } from './ops/departures/DeparturesPage';
 import { ScheduleDepartureForm } from './ops/departures/ScheduleDepartureForm';
+import { VehiclesSection } from './ops/departures/VehiclesSection';
 import type { DeparturesGateway } from './ops/departures/model';
 import { createDeparturesGateway } from './ops/departures/scheduling';
 import type { DepartureExecutionGateway } from './ops/departure/gateway';
@@ -111,7 +112,9 @@ function App({ session, area: areaProp, initialParams, apiClient }: MountProps) 
           setForm({ code });
         }}
         notice={notice}
-      />
+      >
+        {canSchedule && <VehiclesSection gateway={scheduling} />}
+      </DeparturesPage>
     );
   }
   return <OperationsPage gateway={gateway} onRegister={(reservationId) => fixture && setDeparture(fixture.codeOf(reservationId))} />;

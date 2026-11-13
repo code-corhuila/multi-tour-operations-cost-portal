@@ -46,9 +46,19 @@ export interface UpdateInput extends ScheduleInput {
   code: string;
 }
 
+export interface VehicleInput {
+  name: string;
+  capacity: number;
+  key: string;
+}
+
 export interface DeparturesGateway {
+  // True for the adapter that talks to the service; absent for the test data (HU-OPS-002 turns the vehicles on with it).
+  connected?: boolean;
   // False when the service does not take vehicles yet (HU-OPS-002): the form then offers none. Absent means true.
   supportsVehicles?: boolean;
+  // Only the connected adapter registers vehicles; with the test data the section "Vehículos" is not drawn.
+  createVehicle?(input: VehicleInput): Promise<Vehicle>;
   listDepartures(): Promise<DepartureRow[]>;
   listTours(): Promise<Tour[]>;
   listVehicles(): Promise<Vehicle[]>;

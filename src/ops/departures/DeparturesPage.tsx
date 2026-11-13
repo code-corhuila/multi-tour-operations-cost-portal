@@ -1,4 +1,4 @@
-import { useCallback, useState, type FormEvent } from 'react';
+import { useCallback, useState, type FormEvent, type ReactNode } from 'react';
 import { effectiveCapacity } from './capacity';
 import type { DepartureRow, DepartureStatus, DeparturesGateway, Tour, Vehicle } from './model';
 import { useAsync } from '../useAsync';
@@ -14,6 +14,8 @@ export interface DeparturesPageProps {
   onEdit?: (code: string) => void;
   // The line of the form that just returned (spec 005 AC6).
   notice?: string;
+  // What the container adds below the list: the section of vehicles, which talks to the service apart from the test data of the list.
+  children?: ReactNode;
 }
 
 interface Data {
@@ -52,7 +54,7 @@ async function load(gateway: DeparturesGateway): Promise<Data> {
 }
 
 // Page of the Mockup admin-salidas.html (spec 005 PT-10) over the test data of the port.
-export function DeparturesPage({ gateway, canSchedule, canManage, onOpen, onSchedule, onEdit, notice }: DeparturesPageProps) {
+export function DeparturesPage({ gateway, canSchedule, canManage, onOpen, onSchedule, onEdit, notice, children }: DeparturesPageProps) {
   // A stable loader: useAsync reloads whenever the function changes.
   const loadAll = useCallback(() => load(gateway), [gateway]);
   const { state, retry, set } = useAsync(loadAll);
@@ -133,6 +135,8 @@ export function DeparturesPage({ gateway, canSchedule, canManage, onOpen, onSche
           </button>
         </div>
       )}
+
+      {children}
 
       {data && alerts.length > 0 && (
         <section className="operator-panel" aria-labelledby="dep-alerts">

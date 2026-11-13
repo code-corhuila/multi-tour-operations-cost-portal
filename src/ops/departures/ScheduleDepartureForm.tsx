@@ -31,7 +31,7 @@ function failure(error: unknown): { general: string[]; fields: Partial<Record<'t
       general: [
         error.code === 'INVALID_STATUS_TRANSITION'
           ? 'La salida ya no está en un estado que permita este cambio.'
-          : 'El servicio no aceptó la salida: el tour no está disponible o la hora de inicio ya pasó.',
+          : 'El servicio no aceptó la salida: el tour no está disponible, la hora de inicio ya pasó o un vehículo ya está en otra salida a esa hora.',
       ],
       fields: {},
     };
@@ -76,6 +76,7 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
 
   const { tours, vehicles, departures } = state.data;
   const withVehicles = gateway.supportsVehicles !== false;
+  const connected = gateway.connected === true;
   if (tours.length === 0) {
     return (
       <div className="operator-content">
@@ -104,14 +105,16 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
   const locked = !!editing && editing.reservations > 0;
 
   const tour = tours.find((t) => t.id === current.tourId);
-  const chosen = vehicles.filter((v) => current.vehicleIds.includes(v.id));
+  // With the service, only a tour that requires transport takes vehicles (RN-OPS-API-34); with the test data every tour does.
+  const takesVehicles = withVehicles && (!connected || !!tour?.needsTransport);
+  const chosen = takesVehicles ? vehicles.filter((v) => current.vehicleIds.includes(v.id)) : [];
   const hasInterval = !!current.date && !!current.start && !!current.end && current.end > current.start;
   const busy = (vehicleId: string) =>
     hasInterval
       ? departures.find((d) => d.code !== editCode && d.status !== 'CANCELLED' && d.vehicleIds.includes(vehicleId) && overlaps(interval(current), d))
       : undefined;
   const capacity =
-    tour && !withVehicles
+    tour && !takesVehicles && connected
       ? tour.capacity
       : tour
         ? effectiveCapacity(
@@ -123,26 +126,25 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const found = validateDeparture({ ...current, editingCode: editCode }, { tours, vehicles, departures, withVehicles });
+    const found = validateDeparture({ ...current, vehicleIds: chosen.map((v) => v.id), editingCode: editCode }, { tours, vehicles, departures, withVehicles });
     setMessages(found);
     setFieldErrors({});
     if (found.length > 0 || !tour) return;
     setSending(true);
     try {
       const { start, end } = interval(current);
-      const signature = `${editCode ?? 'new'}|${current.tourId}|${start}|${end}|${[...current.vehicleIds].sort().join(',')}`;
+      const vehicleIds = chosen.map((v) => v.id);
+      const signature = `${editCode ?? 'new'}|${current.tourId}|${start}|${end}|${[...vehicleIds].sort().join(',')}`;
       if (attempt.current?.signature !== signature) attempt.current = { signature, key: `schedule:${crypto.randomUUID()}` };
       const key = attempt.current.key;
       const saved = editCode
         ? await gateway.updateDeparture({ code: editCode, tourId: current.tourId, start, end, vehicleIds: current.vehicleIds, key })
-        : await gateway.scheduleDeparture({ tourId: current.tourId, start, end, vehicleIds: current.vehicleIds, key });
+        : await gateway.scheduleDeparture({ tourId: current.tourId, start, end, vehicleIds, key });
       const verb = editCode ? 'actualizada' : 'programada';
-      const tail = editCode || !withVehicles ? '' : ' Ya se puede reservar.';
-      const note = withVehicles ? '' : ' La lista muestra datos de prueba hasta que se conecte.';
+      const tail = editCode || connected ? '' : ' Ya se puede reservar.';
+      const note = connected ? ' La lista muestra datos de prueba hasta que se conecte.' : '';
       attempt.current = undefined;
-      onSaved(
-        `Salida ${saved.code} ${verb} (${tour.name}, ${start.replace('T', ' ')}). ${withVehicles ? 'Capacidad efectiva' : 'Capacidad'}: ${capacity}.${tail}${note}`,
-      );
+      onSaved(`Salida ${saved.code} ${verb} (${tour.name}, ${start.replace('T', ' ')}). Capacidad efectiva: ${capacity}.${tail}${note}`);
     } catch (error) {
       const { general, fields } = editCode ? { general: ['No pudimos guardar la salida. Tus datos siguen aquí.'], fields: {} } : failure(error);
       setMessages(general);
@@ -163,7 +165,7 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
           Volver a salidas
         </button>
       </header>
-      {withVehicles && <p className="operator-eyebrow">Datos de prueba</p>}
+      {!connected && <p className="operator-eyebrow">Datos de prueba</p>}
 
       <form onSubmit={submit} noValidate>
         <section className="operator-panel" aria-labelledby="sch-01">
@@ -223,7 +225,18 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
           </div>
         </section>
 
-        {withVehicles ? (
+        {withVehicles && connected && !takesVehicles ? (
+          <section className="operator-panel" aria-labelledby="sch-02">
+            <p className="operator-eyebrow">02 · Vehículos asignados</p>
+            <h2 id="sch-02">Vehículos</h2>
+            <p className="operator-copy">
+              {tour ? 'Este tour no usa transporte: no necesita vehículos.' : 'Selecciona un tour para ver si necesita vehículos.'}
+            </p>
+            <p className="operator-copy" aria-live="polite">
+              {tour ? `Capacidad de la salida: ${tour.capacity} viajeros (la del tour).` : 'Selecciona un tour para ver la capacidad.'}
+            </p>
+          </section>
+        ) : withVehicles ? (
           <section className="operator-panel" aria-labelledby="sch-02">
             <p className="operator-eyebrow">02 · Vehículos asignados</p>
             <h2 id="sch-02">Vehículos</h2>

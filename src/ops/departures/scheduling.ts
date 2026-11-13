@@ -1,5 +1,17 @@
 import type { ApiClient } from '../../contract';
-import { FieldError, Failed, Forbidden, Refused, Unavailable, type DepartureRow, type DeparturesGateway, type ScheduleInput, type Tour } from './model';
+import {
+  FieldError,
+  Failed,
+  Forbidden,
+  Refused,
+  Unavailable,
+  type DepartureRow,
+  type DeparturesGateway,
+  type ScheduleInput,
+  type Tour,
+  type Vehicle,
+  type VehicleInput,
+} from './model';
 import { TENANT_TIME_ZONE, toInstant } from './time';
 
 interface Failure {
@@ -25,6 +37,14 @@ interface CatalogPage {
   meta: { totalPages: number };
 }
 
+interface VehiclePage {
+  data: { vehicleId: string; name: string; capacity: number }[];
+  meta: { totalPages: number };
+}
+
+const asVehicle = (v: { vehicleId: string; name: string; capacity: number }): Vehicle => ({ id: v.vehicleId, name: v.name, capacity: v.capacity });
+const VEHICLES = '/api/v1/operations-cost/vehicles';
+
 // shortcut: past 5 pages (500 tours) the list is cut without a signal; raise it if a tenant ever has that many.
 const MAX_PAGES = 5;
 const CATALOG = '/api/v1/commercial-reservation/catalog/services?serviceType=TOUR&catalogStatus=ACTIVE&limit=100';
@@ -33,7 +53,33 @@ const CATALOG = '/api/v1/commercial-reservation/catalog/services?serviceType=TOU
 export function createDeparturesGateway(apiClient: ApiClient, rest: DeparturesGateway): DeparturesGateway {
   return {
     ...rest,
-    supportsVehicles: false,
+    connected: true,
+    supportsVehicles: true,
+    async listVehicles() {
+      const vehicles: Vehicle[] = [];
+      try {
+        for (let page = 1; page <= MAX_PAGES; page++) {
+          const answer = await apiClient.request<VehiclePage>(`${VEHICLES}?limit=100&page=${page}`);
+          vehicles.push(...answer.data.map(asVehicle));
+          if (page >= answer.meta.totalPages) break;
+        }
+      } catch (error) {
+        throw translate(error);
+      }
+      return vehicles;
+    },
+    async createVehicle({ name, capacity, key }: VehicleInput): Promise<Vehicle> {
+      try {
+        const answer = await apiClient.request<{ vehicleId: string; name: string; capacity: number }>(VEHICLES, {
+          method: 'POST',
+          headers: { 'Idempotency-Key': key },
+          body: { name, capacity },
+        });
+        return asVehicle(answer);
+      } catch (error) {
+        throw translate(error);
+      }
+    },
     async listTours() {
       const tours: Tour[] = [];
       try {
@@ -48,19 +94,25 @@ export function createDeparturesGateway(apiClient: ApiClient, rest: DeparturesGa
       }
       return tours;
     },
-    async scheduleDeparture({ tourId, start, end, key }: ScheduleInput): Promise<DepartureRow> {
+    async scheduleDeparture({ tourId, start, end, vehicleIds, key }: ScheduleInput): Promise<DepartureRow> {
       try {
-        const answer = await apiClient.request<{ code: string; status: DepartureRow['status']; booked: number }>('/api/v1/operations-cost/departures', {
-          method: 'POST',
-          headers: { 'Idempotency-Key': key },
-          body: {
-            serviceId: tourId,
-            scheduledStart: toInstant(start, TENANT_TIME_ZONE),
-            scheduledEnd: toInstant(end, TENANT_TIME_ZONE),
-            timeZone: TENANT_TIME_ZONE,
+        const answer = await apiClient.request<{ code: string; status: DepartureRow['status']; booked: number; vehicles?: { vehicleId: string }[] }>(
+          '/api/v1/operations-cost/departures',
+          {
+            method: 'POST',
+            headers: { 'Idempotency-Key': key },
+            body: {
+              serviceId: tourId,
+              scheduledStart: toInstant(start, TENANT_TIME_ZONE),
+              scheduledEnd: toInstant(end, TENANT_TIME_ZONE),
+              timeZone: TENANT_TIME_ZONE,
+              // only a tour that requires transport takes vehicles; the field is left out when there is none
+              ...(vehicleIds.length > 0 ? { vehicleIds } : {}),
+            },
           },
-        });
-        return { code: answer.code, tourId, start, end, vehicleIds: [], booked: answer.booked, reservations: 0, status: answer.status };
+        );
+        const assigned = (answer.vehicles ?? []).map((v) => v.vehicleId);
+        return { code: answer.code, tourId, start, end, vehicleIds: assigned, booked: answer.booked, reservations: 0, status: answer.status };
       } catch (error) {
         throw translate(error);
       }
