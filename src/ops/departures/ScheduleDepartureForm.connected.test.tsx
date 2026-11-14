@@ -27,10 +27,22 @@ const created = {
   novelties: [],
 };
 
-function setup(handler: (path: string, init?: { method?: string; headers?: Record<string, string> }) => unknown | Promise<unknown>) {
-  // the departures the form judges conflicts against come from the service: here there are none
+const LOCALIZATION = '/api/v1/identity-audit/tenant/localization';
+const tenant = (timeZone: string) => ({
+  tenantId: 'a1b2c3d4-0000-4000-8000-000000000001',
+  identifier: 'demo',
+  tenantStatus: 'ACTIVE',
+  timeZone,
+  country: 'CO',
+});
+
+function setup(
+  handler: (path: string, init?: { method?: string; headers?: Record<string, string> }) => unknown | Promise<unknown>,
+  zone: () => unknown = () => tenant('America/Bogota'),
+) {
+  // the departures the form judges conflicts against come from the service: here there are none; the zone is the tenant's
   const request = vi.fn(async (path: string, init?: { method?: string; headers?: Record<string, string> }) =>
-    path.startsWith('/api/v1/operations-cost/departures?') ? noDepartures : handler(path, init),
+    path.startsWith('/api/v1/operations-cost/departures?') ? noDepartures : path === LOCALIZATION ? zone() : handler(path, init),
   );
   const gateway = createDeparturesGateway({ request } as unknown as ApiClient, createDeparturesFixture());
   const onSaved = vi.fn();
@@ -210,5 +222,34 @@ describe('the connected form (spec 006)', () => {
       expect(screen.getByRole('button', { name: 'Guardar salida' })).toBeEnabled();
       cleanup();
     }
+  });
+});
+
+describe('the zone of the tenant (spec 015)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('U·the_form_schedules_in_the_zone_of_the_tenant', async () => {
+    const { request, posts, onSaved } = setup(ok, () => tenant('America/Lima'));
+    await fill();
+    save();
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    expect(request.mock.calls.some(([path]) => path === LOCALIZATION)).toBe(true);
+    // 08:00 and 14:00 in Lima (UTC-5) are 13:00 and 19:00 UTC
+    expect(posts()[0][1]).toMatchObject({
+      body: { scheduledStart: '2026-12-01T13:00:00Z', scheduledEnd: '2026-12-01T19:00:00Z', timeZone: 'America/Lima' },
+    });
+  });
+
+  it('U·the_form_does_not_schedule_without_the_zone', async () => {
+    let fail = true;
+    const { posts } = setup(ok, () => (fail ? Promise.reject({ status: 503, code: 'SERVICE_UNAVAILABLE' }) : tenant('America/Lima')));
+    expect(screen.getByRole('status')).toHaveTextContent('Cargando');
+    expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos cargar los datos de la salida.');
+    expect(screen.queryByRole('button', { name: 'Guardar salida' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Tour')).not.toBeInTheDocument();
+    expect(posts()).toHaveLength(0);
+    fail = false;
+    fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
+    expect(await screen.findByRole('button', { name: 'Guardar salida' })).toBeInTheDocument();
   });
 });

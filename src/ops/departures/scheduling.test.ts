@@ -20,7 +20,7 @@ function fakeClient(answer: (call: Call) => unknown): { client: ApiClient; calls
 
 const service = (n: number) => ({ serviceId: `id-${n}`, commercialName: `Tour ${n}`, configuredCapacity: 10 + n, transportRequired: n % 2 === 0 });
 const page = (items: unknown[], p: number, totalPages: number) => ({ data: items, meta: { page: p, limit: 100, total: items.length, totalPages } });
-const input = { tourId: 'id-1', start: '2026-12-01T08:00', end: '2026-12-01T14:00', vehicleIds: [], key: 'schedule:abcdefgh' };
+const input = { tourId: 'id-1', start: '2026-12-01T08:00', end: '2026-12-01T14:00', vehicleIds: [], key: 'schedule:abcdefgh', timeZone: 'America/Bogota' };
 const created = {
   code: 'SAL-004',
   status: 'SCHEDULED',
