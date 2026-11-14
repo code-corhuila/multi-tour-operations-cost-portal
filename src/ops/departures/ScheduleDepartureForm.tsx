@@ -51,8 +51,14 @@ const FieldMessage = ({ id, text }: { id: string; text?: string }) =>
 // Form of the Mockup admin-programar-salida.html (spec 005 PT-11) over the port: the test data, or the service for a new departure (spec 006).
 export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: ScheduleDepartureFormProps) {
   const load = useCallback(async () => {
-    const [tours, vehicles, departures] = await Promise.all([gateway.listTours(), gateway.listVehicles(), gateway.listDepartures()]);
-    return { tours, vehicles, departures };
+    // The zone of the tenant is read on every opening: a failed read leaves the error state, so nobody schedules in a guessed zone.
+    const [tours, vehicles, departures, timeZone] = await Promise.all([
+      gateway.listTours(),
+      gateway.listVehicles(),
+      gateway.listDepartures(),
+      gateway.tenantTimeZone?.(),
+    ]);
+    return { tours, vehicles, departures, timeZone };
   }, [gateway]);
   const { state, retry } = useAsync(load);
   const [form, setForm] = useState<{ tourId: string; date: string; start: string; end: string; vehicleIds: string[] }>();
@@ -74,7 +80,7 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
     );
   }
 
-  const { tours, vehicles, departures } = state.data;
+  const { tours, vehicles, departures, timeZone } = state.data;
   const withVehicles = gateway.supportsVehicles !== false;
   const connected = gateway.connected === true;
   if (tours.length === 0) {
@@ -138,8 +144,8 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
       if (attempt.current?.signature !== signature) attempt.current = { signature, key: `schedule:${crypto.randomUUID()}` };
       const key = attempt.current.key;
       const saved = editCode
-        ? await gateway.updateDeparture({ code: editCode, tourId: current.tourId, start, end, vehicleIds: current.vehicleIds, key })
-        : await gateway.scheduleDeparture({ tourId: current.tourId, start, end, vehicleIds, key });
+        ? await gateway.updateDeparture({ code: editCode, tourId: current.tourId, start, end, vehicleIds: current.vehicleIds, key, timeZone })
+        : await gateway.scheduleDeparture({ tourId: current.tourId, start, end, vehicleIds, key, timeZone });
       const verb = editCode ? 'actualizada' : 'programada';
       const tail = editCode || connected ? '' : ' Ya se puede reservar.';
       attempt.current = undefined;
