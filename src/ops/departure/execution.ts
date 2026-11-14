@@ -2,7 +2,17 @@ import type { ApiClient } from '../../contract';
 import { Failed, Refused } from '../departures/model';
 import { readVehicles, translate } from '../departures/scheduling';
 import { fromInstant, toInstant } from '../departures/time';
-import type { CancellationCause, VehicleChange, CostLine, CostSheet, Departure, DepartureExecutionGateway, DepartureStatus, ReservationState, ServiceResult } from './gateway';
+import type {
+  CancellationCause,
+  VehicleChange,
+  CostLine,
+  CostSheet,
+  Departure,
+  DepartureExecutionGateway,
+  DepartureStatus,
+  ReservationState,
+  ServiceResult,
+} from './gateway';
 
 // The adapter of the page of a departure to the operations-cost service (spec 008 plan D-02). Only what the service offers is
 // served: reading a departure, adding vehicles to it, the start, the end or interruption, the services, the regularization, the costs, the
@@ -131,7 +141,9 @@ export function createExecutionGateway(apiClient: ApiClient): DepartureExecution
       return record(`${DEPARTURES}/${encodeURIComponent(code)}/vehicles`, key, () => ({ vehicleIds }));
     },
     async changeVehicles({ code, vehicleIds, key }) {
-      return vehicleChange(code, () => apiClient.request<VehicleSagaAnswer>(VEHICLE_SAGA, { method: 'POST', headers: { 'Idempotency-Key': key }, body: { departureCode: code, vehicleIds } }));
+      return vehicleChange(code, () =>
+        apiClient.request<VehicleSagaAnswer>(VEHICLE_SAGA, { method: 'POST', headers: { 'Idempotency-Key': key }, body: { departureCode: code, vehicleIds } }),
+      );
     },
     async readVehicleChange(sagaId, code) {
       return vehicleChange(code, () => apiClient.request<VehicleSagaAnswer>(`${VEHICLE_SAGA}/${encodeURIComponent(sagaId)}`));
@@ -230,7 +242,10 @@ export function createExecutionGateway(apiClient: ApiClient): DepartureExecution
     async registerRegularization({ code, result, startedAt, finishedAt, earlyStartMotive, interruption, notDoneCause, timeZone, key }) {
       // A departure that was not carried out sends its cause and no hours; the fields that do not apply are left out.
       if (result === 'NOT_DONE') {
-        return record(`${DEPARTURES}/${encodeURIComponent(code)}/regularization`, key, () => ({ result: 'NOT_CARRIED_OUT', notCarriedOutCause: notDoneCause.trim() }));
+        return record(`${DEPARTURES}/${encodeURIComponent(code)}/regularization`, key, () => ({
+          result: 'NOT_CARRIED_OUT',
+          notCarriedOutCause: notDoneCause.trim(),
+        }));
       }
       return record(`${DEPARTURES}/${encodeURIComponent(code)}/regularization`, key, () => ({
         result,

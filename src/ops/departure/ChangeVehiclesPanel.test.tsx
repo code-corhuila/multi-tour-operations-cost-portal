@@ -42,7 +42,13 @@ type Init = { method?: string; body?: Record<string, unknown>; headers?: Record<
 
 // The page over the connected adapter with a fake client of the container (the same shape as the tests of spec 008).
 function service(
-  opts: { status?: string; canSchedule?: boolean; vehicles?: () => Promise<object[]>; onSaga?: (body: Record<string, unknown>) => unknown; onRead?: () => unknown } = {},
+  opts: {
+    status?: string;
+    canSchedule?: boolean;
+    vehicles?: () => Promise<object[]>;
+    onSaga?: (body: Record<string, unknown>) => unknown;
+    onRead?: () => unknown;
+  } = {},
 ) {
   let current = departure([VAN], 12, opts.status);
   const request = vi.fn(async (path: string, init?: Init) => {
