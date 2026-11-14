@@ -27,10 +27,12 @@ interface Props {
   record: (input: { code: string; reservationId: string; justification: string; key: string }) => Promise<Departure>;
   onDone: (updated: Departure) => void;
   onClose: () => void;
+  // tells the panel that a send is pending, so no other form is opened over it
+  onBusy?: (busy: boolean) => void;
 }
 
 // Spec 012 (RN-OPS-PT-70 to -74): the justification of the emergency, then a confirmation that says it cannot be undone, then the send.
-export function ExtraordinaryCancellationForm({ code, reservation, record, onDone, onClose }: Props) {
+export function ExtraordinaryCancellationForm({ code, reservation, record, onDone, onClose, onBusy }: Props) {
   const [text, setText] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string>();
@@ -40,6 +42,11 @@ export function ExtraordinaryCancellationForm({ code, reservation, record, onDon
   const moved = useRef(false);
   const id = `cancellation-${reservation.reservationId}`;
   const justification = text.trim();
+
+  useEffect(() => {
+    onBusy?.(sending);
+    return () => onBusy?.(false);
+  }, [sending, onBusy]);
 
   // the focus follows the person from the field to the confirmation and back (the element they were on is gone)
   useEffect(() => {
