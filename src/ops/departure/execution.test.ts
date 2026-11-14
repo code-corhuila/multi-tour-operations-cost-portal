@@ -228,6 +228,51 @@ describe('the connected execution gateway', () => {
     await expect(failing({ status: 400 }).registerServices(save)).rejects.toBeInstanceOf(FieldError);
   });
 
+  it('C·the_extraordinary_cancellation_is_sent_with_its_justification_and_shown_next_to_its_reservation', async () => {
+    const { client, calls } = fakeClient(() =>
+      departure({
+        travelersServed: 0,
+        reservations: [
+          {
+            reservationId: 'r-1',
+            customer: 'Ana',
+            travelers: 4,
+            state: 'IN_EXECUTION',
+            extraordinaryCancellation: { justification: 'a medical emergency', recordedBy: 'acc-1', recordedAt: '2026-12-01T15:30:00Z' },
+          },
+          { reservationId: 'r-2', customer: 'Luis', travelers: 2, state: 'IN_EXECUTION' },
+        ],
+      }),
+    );
+    const read = await createExecutionGateway(client).recordExtraordinaryCancellation({
+      code: 'SAL-031',
+      reservationId: 'r-1',
+      justification: ' a medical emergency ',
+      key: 'cancel-key-1',
+    });
+    expect(calls).toEqual([
+      {
+        path: '/api/v1/operations-cost/departures/SAL-031/reservations/r-1/extraordinary-cancellation',
+        init: { method: 'POST', headers: { 'Idempotency-Key': 'cancel-key-1' }, body: { justification: 'a medical emergency' } },
+      },
+    ]);
+    expect(read.reservations[0].extraordinaryCancellation).toEqual({
+      justification: 'a medical emergency',
+      recordedBy: 'acc-1',
+      recordedAt: '2026-12-01T10:30',
+    });
+    expect(read.reservations[1].extraordinaryCancellation).toBeUndefined();
+  });
+
+  it('C·a_refused_extraordinary_cancellation_is_translated_by_its_status', async () => {
+    const cancel = { code: 'SAL-031', reservationId: 'r-1', justification: 'x', key: 'cancel-key-1' };
+    await expect(failing({ status: 422, code: 'BUSINESS_RULE_VIOLATION' }).recordExtraordinaryCancellation(cancel)).rejects.toBeInstanceOf(Refused);
+    await expect(failing({ status: 422, code: 'INVALID_STATUS_TRANSITION' }).recordExtraordinaryCancellation(cancel)).rejects.toBeInstanceOf(Refused);
+    await expect(failing({ status: 503 }).recordExtraordinaryCancellation(cancel)).rejects.toBeInstanceOf(Unavailable);
+    await expect(failing({ status: 400 }).recordExtraordinaryCancellation(cancel)).rejects.toBeInstanceOf(FieldError);
+    await expect(failing({ status: 403 }).recordExtraordinaryCancellation(cancel)).rejects.toBeInstanceOf(Forbidden);
+  });
+
   it('C·the_costs_of_a_departure_are_read_with_their_total_the_travelers_served_and_the_catalogued_cost', async () => {
     const { client, calls } = fakeClient(() => ({
       data: [

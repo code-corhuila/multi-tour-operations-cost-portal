@@ -27,5 +27,11 @@ export function useRegistration() {
     }
   }
 
-  return { sending, failed, error, submit };
+  // a failure that belongs to an attempt the person has left (spec 012)
+  const clear = () => {
+    setFailed(false);
+    setError(undefined);
+  };
+
+  return { sending, failed, error, submit, clear };
 }
