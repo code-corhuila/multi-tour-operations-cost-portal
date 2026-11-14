@@ -15,7 +15,7 @@ const listed = {
 };
 const request = () =>
   vi.fn(async (path: string) =>
-    path.includes('catalog') ? catalog : path.includes('/vehicles') ? noVehicles : path.startsWith('/api/v1/operations-cost/departures?') ? listed : /\/departures\/SAL-\d+$/.test(path) ? { ...created, serviceId: 'svc-1', pendingRegularization: false, interrupted: false, vehicles: [] } : created,
+    path === '/api/v1/identity-audit/tenant/localization' ? { timeZone: 'America/Bogota' } : path.includes('catalog') ? catalog : path.includes('/vehicles') ? noVehicles : path.startsWith('/api/v1/operations-cost/departures?') ? listed : /\/departures\/SAL-\d+$/.test(path) ? { ...created, serviceId: 'svc-1', pendingRegularization: false, interrupted: false, vehicles: [] } : created,
   ) as unknown as ApiClient['request'] & ReturnType<typeof vi.fn>;
 
 const MANAGE = 'MANAGE_DEPARTURE_EXECUTION';
