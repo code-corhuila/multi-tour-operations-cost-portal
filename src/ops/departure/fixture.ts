@@ -116,6 +116,7 @@ const copy = (d: Departure): Departure => ({
   reservations: d.reservations.map((r) => ({ ...r })),
   novelties: d.novelties.map((n) => ({ ...n })),
   history: [...d.history],
+  ...(d.cancellation ? { cancellation: { ...d.cancellation } } : {}),
 });
 
 export function createDepartureFixture(): DepartureExecutionGateway {
@@ -252,23 +253,41 @@ export function createDepartureFixture(): DepartureExecutionGateway {
         },
         code,
       ),
+    cancelDeparture: async ({ code, key }) =>
+      once(
+        key,
+        () => {
+          const d = find(code);
+          if (d.status === 'CANCELLED') return;
+          if (d.status !== 'SCHEDULED') throw new Error('INVALID_STATUS_TRANSITION');
+          const at = fromInstant(new Date().toISOString(), TENANT_TIME_ZONE);
+          d.status = 'CANCELLED';
+          d.pendingRegularization = false;
+          d.mark = 'Cancelada';
+          d.cancellation = { at, cause: 'NOT_ATTRIBUTABLE_TO_CUSTOMER' };
+          d.history.push(log(at, 'Salida cancelada', 'Por una causa no atribuible al cliente'));
+        },
+        code,
+      ),
     registerRegularization: async (input) =>
       once(
         input.key,
         () => {
           const d = find(input.code);
+          const notDone = input.result === 'NOT_DONE';
+          if (notDone && (!input.notDoneCause.trim() || input.notDoneCause.trim().length > 500)) throw new Error('VALIDATION_ERROR');
           if (d.status !== 'SCHEDULED' || !d.pendingRegularization) throw new Error('INVALID_STATUS_TRANSITION');
           d.pendingRegularization = false;
-          const notDone = input.result === 'NOT_DONE';
           d.status = notDone ? 'CANCELLED' : 'FINISHED';
           d.mark = notDone ? 'No realizada' : input.result === 'INTERRUPTED' ? 'Finalizada con interrupción' : 'Cerrada';
           if (!notDone) {
             d.actualStart = input.startedAt;
             d.actualEnd = input.finishedAt;
           }
-          const at = notDone ? (d.actualStart ?? d.scheduledStart) : input.finishedAt;
+          const at = notDone ? fromInstant(new Date().toISOString(), TENANT_TIME_ZONE) : input.finishedAt;
+          if (notDone) d.cancellation = { at, cause: 'NOT_CARRIED_OUT', reason: input.notDoneCause.trim() };
           const detail = notDone
-            ? `No realizada: ${input.notDoneCause}`
+            ? `No realizada: ${input.notDoneCause.trim()}`
             : input.result === 'INTERRUPTED'
               ? `Interrumpida: ${input.interruption}`
               : 'Ejecutada y finalizada';
