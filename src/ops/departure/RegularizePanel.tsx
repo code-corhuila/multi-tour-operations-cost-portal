@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { FieldError } from '../departures/model';
-import { TENANT_TIME_ZONE, toInstant } from '../departures/time';
+import { toInstant } from '../departures/time';
 import type { Departure, RegularizationResult } from './gateway';
 import { failureText, type PanelProps } from './panelProps';
 import { useRegistration } from './useRegistration';
@@ -19,7 +19,7 @@ export function RegularizePanel({ departure, gateway, canManage, onChanged }: Pa
   const [errors, setErrors] = useState<Errors>({});
   const { sending, failed, error: failure, submit } = useRegistration();
   const locked = !canManage || sending;
-  // Wall clocks of the tenant ("2026-10-10T08:00") compare as text; the motive is asked only for a start earlier than the scheduled one.
+  // Wall clocks of the zone of the departure ("2026-10-10T08:00") compare as text; the motive is asked only for a start earlier than the scheduled one.
   const early = start !== '' && start < departure.scheduledStart;
 
   async function send(event?: FormEvent) {
@@ -32,9 +32,9 @@ export function RegularizePanel({ departure, gateway, canManage, onChanged }: Pa
       if (!start) next.start = 'Ingresa la hora de inicio real.';
       if (!end) next.end = 'Ingresa la hora de finalización real.';
       if (early && !motive.trim()) next.motive = 'Ingresa el motivo: el inicio real es anterior al programado.';
-      // The courtesy checks of the page; the service decides. The hours are compared as instants of the tenant, not of the browser.
+      // The courtesy checks of the page; the service decides. The hours are compared as instants of the zone of the departure, not of the browser.
       const now = Date.now();
-      const at = (wall: string) => (wall ? Date.parse(toInstant(wall, TENANT_TIME_ZONE)) : NaN);
+      const at = (wall: string) => (wall ? Date.parse(toInstant(wall, departure.timeZone)) : NaN);
       if (start && at(start) > now) next.start = 'El inicio real no puede ser posterior a este momento.';
       if (start && end && at(end) < at(start)) next.end = 'La finalización real no puede ser anterior al inicio.';
       else if (end && at(end) > now) next.end = 'La finalización real no puede ser posterior a este momento.';
@@ -45,6 +45,7 @@ export function RegularizePanel({ departure, gateway, canManage, onChanged }: Pa
     let updated: Departure | undefined;
     const input = {
       code: departure.code,
+      timeZone: departure.timeZone,
       result,
       startedAt: start,
       finishedAt: end,

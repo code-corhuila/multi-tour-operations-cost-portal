@@ -20,6 +20,7 @@ const created = {
   status: 'SCHEDULED',
   scheduledStart: '2026-12-01T13:00:00Z',
   scheduledEnd: '2026-12-01T19:00:00Z',
+  timeZone: 'America/Bogota',
   capacity: 12,
   booked: 0,
   vehicles: [],

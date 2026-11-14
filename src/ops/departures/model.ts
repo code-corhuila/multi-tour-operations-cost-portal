@@ -16,12 +16,13 @@ export interface Vehicle {
   capacity: number;
 }
 
-// Times are wall-clock strings of the tenant ("2026-10-18T08:00"), like the execution page.
+// Times are wall-clock strings ("2026-10-18T08:00") of `timeZone`, the zone of the departure; the test data leave it out and are all in one zone.
 export interface DepartureRow {
   code: string;
   tourId: string;
   start: string;
   end: string;
+  timeZone?: string;
   vehicleIds: string[];
   booked: number;
   reservations: number;

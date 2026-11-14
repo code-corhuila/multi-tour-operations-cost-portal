@@ -1,8 +1,8 @@
 import { useCallback, useRef, useState, type FormEvent } from 'react';
-import { effectiveCapacity, overlaps } from './capacity';
+import { effectiveCapacity } from './capacity';
 import { FieldError, Forbidden, Refused, Unavailable, type DeparturesGateway } from './model';
 import { useAsync } from '../useAsync';
-import { interval, validateDeparture } from './validateDeparture';
+import { collides, interval, validateDeparture } from './validateDeparture';
 
 export interface ScheduleDepartureFormProps {
   gateway: DeparturesGateway;
@@ -117,7 +117,7 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
   const hasInterval = !!current.date && !!current.start && !!current.end && current.end > current.start;
   const busy = (vehicleId: string) =>
     hasInterval
-      ? departures.find((d) => d.code !== editCode && d.status !== 'CANCELLED' && d.vehicleIds.includes(vehicleId) && overlaps(interval(current), d))
+      ? departures.find((d) => d.code !== editCode && d.status !== 'CANCELLED' && d.vehicleIds.includes(vehicleId) && collides(interval(current), timeZone, d))
       : undefined;
   const capacity =
     tour && !takesVehicles && connected
@@ -132,7 +132,10 @@ export function ScheduleDepartureForm({ gateway, editCode, onBack, onSaved }: Sc
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const found = validateDeparture({ ...current, vehicleIds: chosen.map((v) => v.id), editingCode: editCode }, { tours, vehicles, departures, withVehicles });
+    const found = validateDeparture(
+      { ...current, vehicleIds: chosen.map((v) => v.id), editingCode: editCode },
+      { tours, vehicles, departures, withVehicles, timeZone },
+    );
     setMessages(found);
     setFieldErrors({});
     if (found.length > 0 || !tour) return;

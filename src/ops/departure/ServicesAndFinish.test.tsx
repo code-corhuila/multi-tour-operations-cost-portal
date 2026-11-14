@@ -85,14 +85,21 @@ describe('finish of the departure (RN-OPS-PT-37)', () => {
   });
   it('U·finish_is_refused_for_a_marked_departure_that_never_started_and_for_a_cancelled_one', async () => {
     const gateway = createDepartureFixture();
-    await expect(gateway.registerFinish({ code: 'SAL-014', finishedAt: '2026-10-10T14:00', result: 'FINISHED', cause: '', key: 'k-reg' })).rejects.toThrow(
-      'INVALID_STATUS_TRANSITION',
-    );
-    await expect(gateway.registerFinish({ code: 'SAL-003', finishedAt: '2026-10-02T14:00', result: 'FINISHED', cause: '', key: 'k-canc' })).rejects.toThrow(
-      'INVALID_STATUS_TRANSITION',
-    );
     await expect(
-      gateway.registerFinish({ code: 'SAL-021', finishedAt: '2026-10-14T13:00', result: 'INTERRUPTED', cause: '  ', key: 'k-nocause' }),
+      gateway.registerFinish({ code: 'SAL-014', timeZone: 'America/Bogota', finishedAt: '2026-10-10T14:00', result: 'FINISHED', cause: '', key: 'k-reg' }),
+    ).rejects.toThrow('INVALID_STATUS_TRANSITION');
+    await expect(
+      gateway.registerFinish({ code: 'SAL-003', timeZone: 'America/Bogota', finishedAt: '2026-10-02T14:00', result: 'FINISHED', cause: '', key: 'k-canc' }),
+    ).rejects.toThrow('INVALID_STATUS_TRANSITION');
+    await expect(
+      gateway.registerFinish({
+        code: 'SAL-021',
+        timeZone: 'America/Bogota',
+        finishedAt: '2026-10-14T13:00',
+        result: 'INTERRUPTED',
+        cause: '  ',
+        key: 'k-nocause',
+      }),
     ).rejects.toThrow('VALIDATION_ERROR');
   });
 });

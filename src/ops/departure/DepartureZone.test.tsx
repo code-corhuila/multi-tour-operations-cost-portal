@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ApiClient } from '../../contract';
 import { DepartureExecutionPage } from './DepartureExecutionPage';
 import { createExecutionGateway } from './execution';
+import { isAfterNow } from './panelProps';
 
 // Spec 015 PT15-02 (RN-PT-151): a departure keeps the zone it was scheduled with, whatever the zone of the tenant is now.
 
@@ -45,5 +46,11 @@ describe('the zone of a departure', () => {
 
     await waitFor(() => expect(calls.find((c) => c.path.endsWith('/executions'))?.init?.body).toEqual({ startedAt: '2026-11-10T14:00:00Z' }));
     expect(await screen.findByText('2026-11-10 08:00')).toBeInTheDocument();
+  });
+
+  it('U·a_real_hour_is_judged_against_now_in_the_zone_of_the_departure', () => {
+    // 08:00 in Mexico City is 14:00 UTC: at 13:30 UTC it is still to come, whatever the zone of the browser
+    expect(isAfterNow('2026-11-10T08:00', 'America/Mexico_City', Date.parse('2026-11-10T13:30:00Z'))).toBe(true);
+    expect(isAfterNow('2026-11-10T08:00', 'America/Mexico_City', Date.parse('2026-11-10T14:30:00Z'))).toBe(false);
   });
 });

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import type { Departure } from './gateway';
 import type { PanelProps } from './panelProps';
-import { failureText } from './panelProps';
+import { failureText, isAfterNow } from './panelProps';
 import { useRegistration } from './useRegistration';
 
 // Panel "Inicio de la salida": the real start, required and not before the scheduled one (RN-OPS-PT-32, -33).
@@ -14,11 +14,11 @@ export function StartPanel({ departure, gateway, canManage, onChanged }: PanelPr
     event?.preventDefault();
     if (!value) return setError('Ingresa la hora de inicio real.');
     if (new Date(value) < new Date(departure.scheduledStart)) return setError('El inicio real no puede ser anterior a la hora programada.');
-    if (new Date(value) > new Date()) return setError('El inicio real no puede ser posterior a este momento.');
+    if (isAfterNow(value, departure.timeZone)) return setError('El inicio real no puede ser posterior a este momento.');
     setError(undefined);
     let updated: Departure | undefined;
     const ok = await submit(`${departure.code}|${value}`, async (key) => {
-      updated = await gateway.registerStart({ code: departure.code, startedAt: value, key });
+      updated = await gateway.registerStart({ code: departure.code, startedAt: value, timeZone: departure.timeZone, key });
     });
     if (ok && updated) onChanged(updated);
   }
