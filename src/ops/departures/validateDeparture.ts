@@ -1,5 +1,6 @@
 import { effectiveCapacity, overlaps } from './capacity';
 import type { DepartureRow, Tour, Vehicle } from './model';
+import { toInstant } from './time';
 
 // What the person types; times are "HH:mm" and the date "YYYY-MM-DD" (the two inputs of the Mockup).
 export interface DepartureForm {
@@ -18,12 +19,23 @@ export interface Context {
   departures: DepartureRow[];
   // False when the gateway takes no vehicles: the rules of transport do not apply.
   withVehicles?: boolean;
+  // The zone the form's hours are in; absent with the test data, whose departures are all in one zone and compare as text.
+  timeZone?: string;
 }
 
 export const interval = (form: Pick<DepartureForm, 'date' | 'start' | 'end'>) => ({ start: `${form.date}T${form.start}`, end: `${form.date}T${form.end}` });
 
+// Each listed departure is in its own zone and the form in the tenant's: they are compared as instants, never as text of two zones.
+const instants = (span: { start: string; end: string }, zone?: string) =>
+  zone ? { start: toInstant(span.start, zone), end: toInstant(span.end, zone) } : span;
+export function collides(mine: { start: string; end: string }, zone: string | undefined, d: DepartureRow): boolean {
+  // with a zone on one side only the hours cannot be compared: it counts as a clash, so the vehicle is not given twice
+  if (!zone !== !d.timeZone) return true;
+  return overlaps(instants(mine, zone), instants(d, d.timeZone));
+}
+
 // The rules of the form as a list of messages, like the Mockup (RN-OPS-PT-50 to -55). The service decides for real.
-export function validateDeparture(form: DepartureForm, { tours, vehicles, departures, withVehicles = true }: Context): string[] {
+export function validateDeparture(form: DepartureForm, { tours, vehicles, departures, withVehicles = true, timeZone }: Context): string[] {
   const messages: string[] = [];
   const tour = tours.find((t) => t.id === form.tourId);
   if (!tour) messages.push('Selecciona un tour.');
@@ -38,7 +50,9 @@ export function validateDeparture(form: DepartureForm, { tours, vehicles, depart
   if (form.date && form.start && form.end && form.end > form.start) {
     const mine = interval(form);
     for (const vehicle of chosen) {
-      const other = departures.find((d) => d.code !== form.editingCode && d.status !== 'CANCELLED' && d.vehicleIds.includes(vehicle.id) && overlaps(mine, d));
+      const other = departures.find(
+        (d) => d.code !== form.editingCode && d.status !== 'CANCELLED' && d.vehicleIds.includes(vehicle.id) && collides(mine, timeZone, d),
+      );
       if (other) messages.push(`El vehículo ${vehicle.name} ya está asignado a ${other.code} en ese horario.`);
     }
   }
