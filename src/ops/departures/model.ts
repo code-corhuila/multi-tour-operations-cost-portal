@@ -16,12 +16,13 @@ export interface Vehicle {
   capacity: number;
 }
 
-// Times are wall-clock strings of the tenant ("2026-10-18T08:00"), like the execution page.
+// Times are wall-clock strings ("2026-10-18T08:00") of `timeZone`, the zone of the departure; the test data leave it out and are all in one zone.
 export interface DepartureRow {
   code: string;
   tourId: string;
   start: string;
   end: string;
+  timeZone?: string;
   vehicleIds: string[];
   booked: number;
   reservations: number;
@@ -46,6 +47,8 @@ export interface ScheduleInput {
   end: string;
   vehicleIds: string[];
   key: string;
+  // The IANA zone of the tenant the wall clocks are in; the connected adapter refuses to schedule without it (spec 015 RN-PT-150).
+  timeZone?: string;
 }
 
 export interface UpdateInput extends ScheduleInput {
@@ -68,6 +71,8 @@ export interface DeparturesGateway {
   listDepartures(): Promise<DepartureRow[]>;
   listTours(): Promise<Tour[]>;
   listVehicles(): Promise<Vehicle[]>;
+  // Only the connected adapter reads the zone of the tenant; the test data keep their own (spec 015 plan D-03).
+  tenantTimeZone?(): Promise<string>;
   scheduleDeparture(input: ScheduleInput): Promise<DepartureRow>;
   // Only a SCHEDULED departure is edited; with reservations its date, hours and tour stay (RN-OPS-PT-56).
   updateDeparture(input: UpdateInput): Promise<DepartureRow>;

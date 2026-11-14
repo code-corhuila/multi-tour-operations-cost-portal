@@ -17,6 +17,7 @@ const answer = (extra: Record<string, unknown> = {}) => ({
   status: 'FINISHED',
   scheduledStart: '2026-12-01T13:00:00Z',
   scheduledEnd: '2026-12-01T21:00:00Z',
+  timeZone: 'America/Bogota',
   capacity: 12,
   booked: 0,
   pendingRegularization: false,
@@ -41,6 +42,7 @@ function fakeClient(body: unknown): { client: ApiClient; calls: Call[] } {
 
 const input = (extra: Partial<RegularizationInput> = {}): RegularizationInput => ({
   code: 'SAL-031',
+  timeZone: 'America/Bogota',
   result: 'EXECUTED',
   startedAt: '2026-12-01T08:00',
   finishedAt: '2026-12-01T15:00',
@@ -105,6 +107,7 @@ const marked = (): Departure => ({
   booked: 0,
   scheduledStart: '2026-10-10T08:00',
   scheduledEnd: '2026-10-10T14:00',
+  timeZone: 'America/Bogota',
   mark: 'Pendiente de regularización',
   reservations: [],
   novelties: [],

@@ -1,4 +1,5 @@
 import { Forbidden, Refused } from '../departures/model';
+import { toInstant } from '../departures/time';
 import type { Departure, DepartureExecutionGateway } from './gateway';
 
 export interface PanelProps {
@@ -28,3 +29,13 @@ export function failureText(error: unknown, what: string, hours = true): string 
 
 // The page shows the wall-clock strings as the service gives them.
 export const showTime = (value?: string) => (value ? value.replace('T', ' ') : '—');
+
+/** Whether a wall clock of `zone` is later than `now`: the hour is of the zone of the departure, never of the browser. */
+export function isAfterNow(wall: string, zone: string, now = Date.now()): boolean {
+  try {
+    return Date.parse(toInstant(wall, zone)) > now;
+  } catch {
+    // a wall clock that cannot be converted is told by the gateway, which refuses it before anything is sent
+    return false;
+  }
+}

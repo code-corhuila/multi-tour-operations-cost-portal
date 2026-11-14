@@ -58,9 +58,10 @@ export interface Novelty {
   affected?: number;
 }
 
-// Times are wall-clock strings of the tenant ("2026-10-18T08:00"); the container does not give the tenant zone yet.
+// Times are wall-clock strings ("2026-10-18T08:00") of the zone of the departure, the one it was scheduled with (spec 015 RN-PT-151).
 export interface Departure {
   code: string;
+  timeZone: string;
   status: DepartureStatus;
   vehicles: string[];
   capacity: number;
@@ -92,6 +93,7 @@ export interface Departure {
 
 export interface StartInput {
   code: string;
+  timeZone: string;
   startedAt: string;
   key: string;
 }
@@ -125,6 +127,7 @@ export interface NoveltyInput {
 
 export interface FinishInput {
   code: string;
+  timeZone: string;
   finishedAt: string;
   result: 'FINISHED' | 'INTERRUPTED';
   cause: string;
@@ -136,6 +139,7 @@ export type RegularizationResult = 'EXECUTED' | 'INTERRUPTED' | 'NOT_DONE';
 // Fields that do not apply to the result are sent empty (RN-OPS-PT-38).
 export interface RegularizationInput {
   code: string;
+  timeZone: string;
   result: RegularizationResult;
   startedAt: string;
   finishedAt: string;

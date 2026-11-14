@@ -21,6 +21,7 @@ const reservation = (
 const seed = (): Departure[] => [
   {
     code: 'SAL-018',
+    timeZone: TENANT_TIME_ZONE,
     status: 'SCHEDULED',
     vehicles: ['Van VAN-204'],
     capacity: 12,
@@ -34,6 +35,7 @@ const seed = (): Departure[] => [
   },
   {
     code: 'SAL-021',
+    timeZone: TENANT_TIME_ZONE,
     status: 'IN_EXECUTION',
     vehicles: ['Bote BOT-02'],
     capacity: 10,
@@ -51,6 +53,7 @@ const seed = (): Departure[] => [
   },
   {
     code: 'SAL-014',
+    timeZone: TENANT_TIME_ZONE,
     status: 'SCHEDULED',
     pendingRegularization: true,
     vehicles: ['Van VAN-101'],
@@ -65,6 +68,7 @@ const seed = (): Departure[] => [
   },
   {
     code: 'SAL-009',
+    timeZone: TENANT_TIME_ZONE,
     status: 'FINISHED',
     vehicles: ['Van VAN-204'],
     capacity: 12,
@@ -80,6 +84,7 @@ const seed = (): Departure[] => [
   },
   {
     code: 'SAL-025',
+    timeZone: TENANT_TIME_ZONE,
     status: 'SCHEDULED',
     vehicles: [],
     capacity: 10,
@@ -93,6 +98,7 @@ const seed = (): Departure[] => [
   },
   {
     code: 'SAL-003',
+    timeZone: TENANT_TIME_ZONE,
     status: 'CANCELLED',
     vehicles: [],
     capacity: 10,

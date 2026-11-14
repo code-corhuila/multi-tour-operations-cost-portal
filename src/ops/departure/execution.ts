@@ -1,7 +1,7 @@
 import type { ApiClient } from '../../contract';
 import { Failed, Refused } from '../departures/model';
 import { readVehicles, translate } from '../departures/scheduling';
-import { TENANT_TIME_ZONE, fromInstant, toInstant } from '../departures/time';
+import { fromInstant, toInstant } from '../departures/time';
 import type { CancellationCause, CostLine, CostSheet, Departure, DepartureExecutionGateway, DepartureStatus, ReservationState, ServiceResult } from './gateway';
 
 // The adapter of the page of a departure to the operations-cost service (spec 008 plan D-02). Only what the service offers is
@@ -13,6 +13,8 @@ interface DepartureAnswer {
   status: DepartureStatus;
   scheduledStart: string;
   scheduledEnd: string;
+  // Since contract 0.13.0: the zone the departure was scheduled with; its instants are shown and recorded in it (spec 015 D-02).
+  timeZone: string;
   capacity: number;
   booked: number;
   actualStart?: string;
@@ -56,21 +58,25 @@ interface SagaAnswer {
   reason?: string;
 }
 
-const wall = (instant?: string) => (instant ? fromInstant(instant, TENANT_TIME_ZONE) : undefined);
 const notAvailable = () => Promise.reject(new Error('NOT_AVAILABLE'));
 const DEPARTURES = '/api/v1/operations-cost/departures';
 
 function asDeparture(d: DepartureAnswer): Departure {
+  const zone = d.timeZone;
+  // an answer without its zone is a failure: a guessed zone would show and record another hour
+  if (!zone) throw new Failed();
+  const wall = (instant?: string) => (instant ? fromInstant(instant, zone) : undefined);
   return {
     code: d.code,
+    timeZone: zone,
     status: d.status,
     vehicles: d.vehicles.map((v) => v.name),
     vehicleIds: d.vehicles.map((v) => v.vehicleId),
     transportRequired: d.transportRequired ?? false,
     capacity: d.capacity,
     booked: d.booked,
-    scheduledStart: fromInstant(d.scheduledStart, TENANT_TIME_ZONE),
-    scheduledEnd: fromInstant(d.scheduledEnd, TENANT_TIME_ZONE),
+    scheduledStart: fromInstant(d.scheduledStart, zone),
+    scheduledEnd: fromInstant(d.scheduledEnd, zone),
     actualStart: wall(d.actualStart),
     actualEnd: wall(d.actualEnd),
     mark: d.pendingRegularization ? 'Pendiente de regularización' : d.interrupted ? 'Interrumpida' : '',
@@ -80,7 +86,7 @@ function asDeparture(d: DepartureAnswer): Departure {
     reservations: (d.reservations ?? []).map(({ extraordinaryCancellation, ...reservation }) => ({
       ...reservation,
       ...(extraordinaryCancellation
-        ? { extraordinaryCancellation: { ...extraordinaryCancellation, recordedAt: fromInstant(extraordinaryCancellation.recordedAt, TENANT_TIME_ZONE) } }
+        ? { extraordinaryCancellation: { ...extraordinaryCancellation, recordedAt: fromInstant(extraordinaryCancellation.recordedAt, zone) } }
         : {}),
     })),
     reservationsUnavailable: d.reservations === undefined,
@@ -88,7 +94,7 @@ function asDeparture(d: DepartureAnswer): Departure {
     ...(d.cancellation
       ? {
           cancellation: {
-            at: fromInstant(d.cancellation.cancelledAt, TENANT_TIME_ZONE),
+            at: fromInstant(d.cancellation.cancelledAt, zone),
             ...(d.cancellation.cancelledBy ? { by: d.cancellation.cancelledBy } : {}),
             cause: d.cancellation.cause,
             ...(d.cancellation.reason ? { reason: d.cancellation.reason } : {}),
@@ -96,7 +102,7 @@ function asDeparture(d: DepartureAnswer): Departure {
         }
       : {}),
     novelties: (d.novelties ?? []).map((n) => ({
-      at: fromInstant(n.at, TENANT_TIME_ZONE),
+      at: fromInstant(n.at, zone),
       type: n.type === 'PERSONAL_EMERGENCY' ? 'Emergencia personal' : 'Novedad',
       detail: n.detail,
       who: n.who,
@@ -153,12 +159,12 @@ export function createExecutionGateway(apiClient: ApiClient): DepartureExecution
         throw translate(error);
       }
     },
-    async registerStart({ code, startedAt, key }) {
-      return record(`${DEPARTURES}/${encodeURIComponent(code)}/executions`, key, () => ({ startedAt: toInstant(startedAt, TENANT_TIME_ZONE) }));
+    async registerStart({ code, startedAt, timeZone, key }) {
+      return record(`${DEPARTURES}/${encodeURIComponent(code)}/executions`, key, () => ({ startedAt: toInstant(startedAt, timeZone) }));
     },
-    async registerFinish({ code, finishedAt, result, cause, key }) {
+    async registerFinish({ code, finishedAt, result, cause, timeZone, key }) {
       return record(`${DEPARTURES}/${encodeURIComponent(code)}/finish`, key, () => ({
-        finishedAt: toInstant(finishedAt, TENANT_TIME_ZONE),
+        finishedAt: toInstant(finishedAt, timeZone),
         result,
         // only an interruption carries its cause
         ...(result === 'INTERRUPTED' ? { cause } : {}),
@@ -206,15 +212,15 @@ export function createExecutionGateway(apiClient: ApiClient): DepartureExecution
         throw error instanceof Refused || error instanceof Failed ? error : translate(error);
       }
     },
-    async registerRegularization({ code, result, startedAt, finishedAt, earlyStartMotive, interruption, notDoneCause, key }) {
+    async registerRegularization({ code, result, startedAt, finishedAt, earlyStartMotive, interruption, notDoneCause, timeZone, key }) {
       // A departure that was not carried out sends its cause and no hours; the fields that do not apply are left out.
       if (result === 'NOT_DONE') {
         return record(`${DEPARTURES}/${encodeURIComponent(code)}/regularization`, key, () => ({ result: 'NOT_CARRIED_OUT', notCarriedOutCause: notDoneCause.trim() }));
       }
       return record(`${DEPARTURES}/${encodeURIComponent(code)}/regularization`, key, () => ({
         result,
-        actualStart: toInstant(startedAt, TENANT_TIME_ZONE),
-        actualEnd: toInstant(finishedAt, TENANT_TIME_ZONE),
+        actualStart: toInstant(startedAt, timeZone),
+        actualEnd: toInstant(finishedAt, timeZone),
         ...(result === 'INTERRUPTED' ? { interruption: interruption.trim() } : {}),
         ...(earlyStartMotive.trim() ? { earlyStartReason: earlyStartMotive.trim() } : {}),
       }));
