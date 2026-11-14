@@ -20,7 +20,7 @@ const clickStart = () => fireEvent.click(screen.getByRole('button', { name: 'Reg
 // over the test data of the departure gateway.
 describe('panels of a departure (RN-OPS-PT-31)', () => {
   it('U·panels_follow_the_status_of_the_departure: each status shows only its panels', () => {
-    expect(panelsFor('SCHEDULED')).toEqual(['departure', 'vehicles', 'start', 'cancel', 'reservations', 'costs', 'history']);
+    expect(panelsFor('SCHEDULED')).toEqual(['departure', 'vehicles', 'change-vehicles', 'start', 'cancel', 'reservations', 'costs', 'history']);
     expect(panelsFor('IN_EXECUTION')).toEqual(['departure', 'reservations', 'novelties', 'finish', 'costs', 'history']);
     expect(panelsFor('SCHEDULED', true)).toEqual(['departure', 'regularize', 'cancel', 'reservations', 'costs', 'history']);
     expect(panelsFor('IN_EXECUTION', true)).toEqual(['departure', 'reservations', 'novelties', 'finish', 'costs', 'history']);
@@ -431,9 +431,12 @@ describe('adding vehicles to a departure over the service (spec 008)', () => {
       }
       return current ?? answer(opts.status ?? 'SCHEDULED', opts.transport ?? true, [{ vehicleId: 'veh-1', name: 'Van', capacity: 12 }], 12, opts.booked ?? 0);
     });
+    const gateway = createExecutionGateway({ request } as unknown as ApiClient);
+    // the panel of a change of vehicles (spec 016) lists the same vehicles; it has its own tests
+    delete gateway.changeVehicles;
     render(
       <DepartureExecutionPage
-        gateway={createExecutionGateway({ request } as unknown as ApiClient)}
+        gateway={gateway}
         code="SAL-031"
         canManage
         canSchedule={opts.canSchedule ?? true}

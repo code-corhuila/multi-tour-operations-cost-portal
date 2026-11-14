@@ -2,7 +2,7 @@ import type { ApiClient } from '../../contract';
 import { Failed, Refused } from '../departures/model';
 import { readVehicles, translate } from '../departures/scheduling';
 import { fromInstant, toInstant } from '../departures/time';
-import type { CancellationCause, CostLine, CostSheet, Departure, DepartureExecutionGateway, DepartureStatus, ReservationState, ServiceResult } from './gateway';
+import type { CancellationCause, VehicleChange, CostLine, CostSheet, Departure, DepartureExecutionGateway, DepartureStatus, ReservationState, ServiceResult } from './gateway';
 
 // The adapter of the page of a departure to the operations-cost service (spec 008 plan D-02). Only what the service offers is
 // served: reading a departure, adding vehicles to it, the start, the end or interruption, the services, the regularization, the costs, the
@@ -24,6 +24,7 @@ interface DepartureAnswer {
   pendingRegularization: boolean;
   startAlert: boolean;
   transportRequired?: boolean;
+  tourCapacity?: number;
   vehicles: { vehicleId: string; name: string }[];
   cancellation?: { cancelledAt: string; cancelledBy?: string; cause: CancellationCause; reason?: string };
   // Since contract 0.12.0 (HU-OPS-008): the personal emergencies of the departure.
@@ -58,8 +59,15 @@ interface SagaAnswer {
   reason?: string;
 }
 
+interface VehicleSagaAnswer {
+  id: string;
+  status: VehicleChange['status'];
+  reason?: string;
+}
+
 const notAvailable = () => Promise.reject(new Error('NOT_AVAILABLE'));
 const DEPARTURES = '/api/v1/operations-cost/departures';
+const VEHICLE_SAGA = '/api/v1/sagas/change-departure-vehicles';
 
 function asDeparture(d: DepartureAnswer): Departure {
   const zone = d.timeZone;
@@ -73,6 +81,7 @@ function asDeparture(d: DepartureAnswer): Departure {
     vehicles: d.vehicles.map((v) => v.name),
     vehicleIds: d.vehicles.map((v) => v.vehicleId),
     transportRequired: d.transportRequired ?? false,
+    ...(d.tourCapacity === undefined ? {} : { tourCapacity: d.tourCapacity }),
     capacity: d.capacity,
     booked: d.booked,
     scheduledStart: fromInstant(d.scheduledStart, zone),
@@ -116,10 +125,16 @@ function asDeparture(d: DepartureAnswer): Departure {
 export function createExecutionGateway(apiClient: ApiClient): DepartureExecutionGateway {
   return {
     connected: true,
-    panels: ['departure', 'vehicles', 'start', 'reservations', 'finish', 'regularize', 'costs', 'cancel', 'cancellation'],
+    panels: ['departure', 'vehicles', 'change-vehicles', 'start', 'reservations', 'finish', 'regularize', 'costs', 'cancel', 'cancellation'],
     listVehicles: () => readVehicles(apiClient),
     async addVehicles({ code, vehicleIds, key }) {
       return record(`${DEPARTURES}/${encodeURIComponent(code)}/vehicles`, key, () => ({ vehicleIds }));
+    },
+    async changeVehicles({ code, vehicleIds, key }) {
+      return vehicleChange(code, () => apiClient.request<VehicleSagaAnswer>(VEHICLE_SAGA, { method: 'POST', headers: { 'Idempotency-Key': key }, body: { departureCode: code, vehicleIds } }));
+    },
+    async readVehicleChange(sagaId, code) {
+      return vehicleChange(code, () => apiClient.request<VehicleSagaAnswer>(`${VEHICLE_SAGA}/${encodeURIComponent(sagaId)}`));
     },
     async getCosts(code): Promise<CostSheet> {
       try {
@@ -226,6 +241,17 @@ export function createExecutionGateway(apiClient: ApiClient): DepartureExecution
       }));
     },
   };
+
+  // The departure is read again after any answer of the saga, so the page shows what it is now (spec 016 D-03).
+  async function vehicleChange(code: string, ask: () => Promise<VehicleSagaAnswer>): Promise<VehicleChange> {
+    try {
+      const saga = await ask();
+      const fresh = await apiClient.request<DepartureAnswer>(`${DEPARTURES}/${encodeURIComponent(code)}`).catch(() => undefined);
+      return { sagaId: saga.id, status: saga.status, ...(saga.reason ? { reason: saga.reason } : {}), ...(fresh ? { departure: asDeparture(fresh) } : {}) };
+    } catch (error) {
+      throw translate(error);
+    }
+  }
 
   // The body is built inside the guard: a wall clock that cannot be converted is a failure that is told, and nothing is sent.
   async function record(path: string, key: string, body: () => Record<string, unknown>): Promise<Departure> {
