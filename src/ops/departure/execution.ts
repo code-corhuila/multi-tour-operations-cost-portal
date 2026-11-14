@@ -33,6 +33,7 @@ interface DepartureAnswer {
     travelersServed?: number;
     noShow?: boolean;
     cause?: string;
+    extraordinaryCancellation?: { justification: string; recordedBy: string; recordedAt: string };
   }[];
 }
 
@@ -64,7 +65,12 @@ function asDeparture(d: DepartureAnswer): Departure {
     pendingRegularization: d.pendingRegularization,
     startAlert: d.startAlert,
     ...(d.interruptionCause ? { interruptionCause: d.interruptionCause } : {}),
-    reservations: d.reservations ?? [],
+    reservations: (d.reservations ?? []).map(({ extraordinaryCancellation, ...reservation }) => ({
+      ...reservation,
+      ...(extraordinaryCancellation
+        ? { extraordinaryCancellation: { ...extraordinaryCancellation, recordedAt: fromInstant(extraordinaryCancellation.recordedAt, TENANT_TIME_ZONE) } }
+        : {}),
+    })),
     reservationsUnavailable: d.reservations === undefined,
     ...(d.travelersServed === undefined ? {} : { travelersServed: d.travelersServed }),
     novelties: [],
@@ -141,6 +147,11 @@ export function createExecutionGateway(apiClient: ApiClient): DepartureExecution
       }));
     },
     registerNovelty: notAvailable,
+    async recordExtraordinaryCancellation({ code, reservationId, justification, key }) {
+      return record(`${DEPARTURES}/${encodeURIComponent(code)}/reservations/${encodeURIComponent(reservationId)}/extraordinary-cancellation`, key, () => ({
+        justification: justification.trim(),
+      }));
+    },
     async registerRegularization({ code, result, startedAt, finishedAt, earlyStartMotive, interruption, key }) {
       // The service cannot cancel a departure yet (HU-OPS-006): "not done" is never sent. The fields that do not apply are left out.
       if (result === 'NOT_DONE') return notAvailable();
