@@ -228,10 +228,79 @@ describe('the connected execution gateway', () => {
     await expect(failing({ status: 400 }).registerServices(save)).rejects.toBeInstanceOf(FieldError);
   });
 
+  it('C·the_costs_of_a_departure_are_read_with_their_total_the_travelers_served_and_the_catalogued_cost', async () => {
+    const { client, calls } = fakeClient(() => ({
+      data: [
+        {
+          costId: 'c-1',
+          concept: 'Boat and guide',
+          amountCents: 84000000,
+          mode: 'CALCULATED',
+          unitCostCents: 21000000,
+          travelersServed: 4,
+          withoutParametrization: false,
+          recordedAt: '2026-12-01T15:00:00Z',
+        },
+        { costId: 'c-2', concept: 'Fuel', amountCents: 50000, mode: 'MANUAL', withoutParametrization: true, justification: 'Paid at the dock', recordedAt: '2026-12-01T16:00:00Z' },
+      ],
+      totalCents: 84050000,
+      travelersServed: 4,
+      baseCostCents: 21000000,
+    }));
+    const sheet = await createExecutionGateway(client).getCosts!('SAL-031');
+    expect(calls.map((c) => c.path)).toEqual(['/api/v1/operations-cost/departures/SAL-031/costs']);
+    expect(sheet).toMatchObject({ totalCents: 84050000, travelersServed: 4, baseCostCents: 21000000 });
+    expect(sheet.lines).toHaveLength(2);
+    expect(sheet.lines[0]).toMatchObject({ costId: 'c-1', mode: 'CALCULATED', unitCostCents: 21000000, travelersServed: 4, withoutParametrization: false });
+    expect(sheet.lines[1]).toMatchObject({ mode: 'MANUAL', withoutParametrization: true, justification: 'Paid at the dock' });
+  });
+
+  it('C·an_answer_that_is_not_a_sheet_of_costs_is_a_failure', async () => {
+    for (const bad of [{}, { data: [], totalCents: 'x', travelersServed: 0 }, { data: [], totalCents: 0 }]) {
+      await expect(createExecutionGateway(fakeClient(() => bad).client).getCosts!('SAL-031')).rejects.toBeInstanceOf(Failed);
+    }
+  });
+
+  it('C·a_tour_without_a_catalogued_cost_has_no_base_cost_in_the_sheet', async () => {
+    const { client } = fakeClient(() => ({ data: [], totalCents: 0, travelersServed: 0 }));
+    const sheet = await createExecutionGateway(client).getCosts!('SAL-031');
+    expect(sheet.lines).toEqual([]);
+    expect(sheet.baseCostCents).toBeUndefined();
+  });
+
+  it('C·a_real_expense_is_sent_with_its_amount_in_minor_units_its_key_and_only_the_justification_that_exists', async () => {
+    const { client, calls } = fakeClient(() => ({ costId: 'c-9', concept: 'Fuel', amountCents: 125050, mode: 'MANUAL', withoutParametrization: false, recordedAt: '2026-12-01T16:00:00Z' }));
+    const gateway = createExecutionGateway(client);
+    const line = await gateway.recordCost!({ code: 'SAL-031', concept: ' Fuel ', mode: 'MANUAL', amountCents: 125050, justification: '', key: 'cost-key-0001' });
+    await gateway.recordCost!({ code: 'SAL-031', concept: 'Fuel', mode: 'MANUAL', amountCents: 125050, justification: ' Paid at the dock ', key: 'cost-key-0002' });
+    expect(calls[0]).toEqual({
+      path: '/api/v1/operations-cost/departures/SAL-031/costs',
+      init: { method: 'POST', headers: { 'Idempotency-Key': 'cost-key-0001' }, body: { concept: 'Fuel', mode: 'MANUAL', amountCents: 125050 } },
+    });
+    expect(calls[1].init).toMatchObject({ body: { justification: 'Paid at the dock' } });
+    expect(line).toMatchObject({ costId: 'c-9', amountCents: 125050, mode: 'MANUAL' });
+  });
+
+  it('C·a_calculated_cost_sends_only_the_concept_and_the_mode_never_an_amount', async () => {
+    const { client, calls } = fakeClient(() => ({ costId: 'c-8', concept: 'Boat', amountCents: 84000000, mode: 'CALCULATED', withoutParametrization: false, recordedAt: '2026-12-01T16:00:00Z' }));
+    await createExecutionGateway(client).recordCost!({ code: 'SAL-031', concept: 'Boat', mode: 'CALCULATED', amountCents: 999, justification: 'ignored', key: 'cost-key-0003' });
+    expect(calls[0].init).toEqual({ method: 'POST', headers: { 'Idempotency-Key': 'cost-key-0003' }, body: { concept: 'Boat', mode: 'CALCULATED' } });
+  });
+
+  it('C·a_refused_cost_is_translated_by_its_status', async () => {
+    const cost = { code: 'SAL-031', concept: 'Fuel', mode: 'MANUAL' as const, amountCents: 1000, justification: '', key: 'cost-key-0001' };
+    await expect(failing({ status: 422, code: 'BUSINESS_RULE_VIOLATION' }).recordCost!(cost)).rejects.toBeInstanceOf(Refused);
+    await expect(failing({ status: 422, code: 'INVALID_STATUS_TRANSITION' }).recordCost!(cost)).rejects.toBeInstanceOf(Refused);
+    await expect(failing({ status: 403 }).recordCost!(cost)).rejects.toBeInstanceOf(Forbidden);
+    await expect(failing({ status: 503 }).recordCost!(cost)).rejects.toBeInstanceOf(Unavailable);
+    await expect(failing({ status: 400 }).recordCost!(cost)).rejects.toBeInstanceOf(FieldError);
+    await expect(failing({ status: 503 }).getCosts!('SAL-031')).rejects.toBeInstanceOf(Unavailable);
+  });
+
   it('U·it_says_it_talks_to_the_service_and_offers_the_departure_the_start_the_finish_and_the_regularization', () => {
     const gateway = createExecutionGateway(fakeClient(() => departure()).client);
     expect(gateway.connected).toBe(true);
-    expect(gateway.panels).toEqual(['departure', 'vehicles', 'start', 'reservations', 'finish', 'regularize']);
+    expect(gateway.panels).toEqual(['departure', 'vehicles', 'start', 'reservations', 'finish', 'regularize', 'costs']);
   });
 
   it('U·what_the_service_does_not_offer_yet_is_refused_and_never_sent', async () => {
