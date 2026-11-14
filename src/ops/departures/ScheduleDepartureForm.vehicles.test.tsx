@@ -50,6 +50,7 @@ function setup(onSchedule: () => unknown = () => created, rest = createDeparture
   const request = vi.fn(async (path: string, _init?: Init) => {
     if (path.includes('catalog')) return page(tours);
     if (path.includes('/vehicles')) return page(vehicles);
+    if (path === '/api/v1/identity-audit/tenant/localization') return { timeZone: TENANT_TIME_ZONE };
     // the departures the form judges conflicts against come from the service; the test data stand in for them
     if (path.startsWith('/api/v1/operations-cost/departures?')) return page((await rest.listDepartures()).map(asService));
     return onSchedule();
