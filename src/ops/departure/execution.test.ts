@@ -408,6 +408,59 @@ describe('the connected execution gateway', () => {
     });
   });
 
+  it('C·a_personal_emergency_is_sent_to_novelties_with_its_key_and_the_novelties_of_the_departure_are_read', async () => {
+    const { client, calls } = fakeClient(() =>
+      departure({
+        reservations: [{ reservationId: 'r-1', customer: 'Ana', travelers: 4, state: 'IN_EXECUTION' }],
+        novelties: [{ at: '2026-12-01T15:30:00Z', type: 'PERSONAL_EMERGENCY', detail: 'Se lastimo una pierna', who: 'acc-1', reservationId: 'r-1', affected: 2 }],
+      }),
+    );
+    const read = await createExecutionGateway(client).registerNovelty({
+      code: 'SAL-031',
+      reservationId: 'r-1',
+      detail: '  Se lastimo una pierna  ',
+      emergency: true,
+      affected: 2,
+      key: 'emergency-key-1',
+    });
+    expect(calls).toEqual([
+      {
+        path: '/api/v1/operations-cost/departures/SAL-031/novelties',
+        init: {
+          method: 'POST',
+          headers: { 'Idempotency-Key': 'emergency-key-1' },
+          body: { reservationId: 'r-1', type: 'PERSONAL_EMERGENCY', detail: 'Se lastimo una pierna', affected: 2 },
+        },
+      },
+    ]);
+    expect(read.novelties).toEqual([
+      { at: '2026-12-01T10:30', type: 'Emergencia personal', detail: 'Se lastimo una pierna', who: 'acc-1', reservationId: 'r-1', affected: 2 },
+    ]);
+  });
+
+  it('C·a_departure_without_novelties_has_none_and_an_ordinary_novelty_is_read_as_such', async () => {
+    expect((await createExecutionGateway(fakeClient(() => departure()).client).getDeparture('SAL-031'))?.novelties).toEqual([]);
+    const { client } = fakeClient(() => departure({ novelties: [{ at: '2026-12-01T15:30:00Z', type: 'NOVELTY', detail: 'Lluvia', who: 'acc-1', reservationId: 'r-1' }] }));
+    expect((await createExecutionGateway(client).getDeparture('SAL-031'))?.novelties[0]).toMatchObject({ type: 'Novedad', detail: 'Lluvia' });
+  });
+
+  it('C·the_ordinary_novelty_is_refused_and_never_sent', async () => {
+    const { client, calls } = fakeClient(() => departure());
+    await expect(
+      createExecutionGateway(client).registerNovelty({ code: 'SAL-031', reservationId: 'r-1', detail: 'Lluvia', emergency: false, key: 'novelty-key-1' }),
+    ).rejects.toThrow('NOT_AVAILABLE');
+    expect(calls).toHaveLength(0);
+  });
+
+  it('C·a_refused_emergency_is_translated_by_its_status', async () => {
+    const input = { code: 'SAL-031', reservationId: 'r-1', detail: 'x', emergency: true, affected: 1, key: 'emergency-key-1' };
+    await expect(failing({ status: 422, code: 'BUSINESS_RULE_VIOLATION' }).registerNovelty(input)).rejects.toBeInstanceOf(Refused);
+    await expect(failing({ status: 422, code: 'INVALID_STATUS_TRANSITION' }).registerNovelty(input)).rejects.toBeInstanceOf(Refused);
+    await expect(failing({ status: 503 }).registerNovelty(input)).rejects.toBeInstanceOf(Unavailable);
+    await expect(failing({ status: 400 }).registerNovelty(input)).rejects.toBeInstanceOf(FieldError);
+    await expect(failing({ status: 403 }).registerNovelty(input)).rejects.toBeInstanceOf(Forbidden);
+  });
+
   it('U·it_says_it_talks_to_the_service_and_offers_the_departure_the_start_the_finish_and_the_regularization', () => {
     const gateway = createExecutionGateway(fakeClient(() => departure()).client);
     expect(gateway.connected).toBe(true);

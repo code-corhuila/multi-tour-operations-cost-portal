@@ -230,9 +230,17 @@ export function createDepartureFixture(): DepartureExecutionGateway {
         () => {
           const d = find(code);
           if (d.status !== 'IN_EXECUTION') throw new Error('INVALID_STATUS_TRANSITION');
-          const at = d.actualStart ?? '';
-          d.novelties.push({ at, type: emergency ? 'Emergencia personal' : 'Novedad', detail, who, reservationId, affected });
-          d.history.push(log(at, emergency ? 'Emergencia personal' : 'Novedad', detail));
+          const text = detail.trim();
+          if (emergency) {
+            // the rules of the service (api 011): a detail of 1 to 1000, the travelers from 1, a reservation in execution, one emergency each
+            if (!text || text.length > 1000 || affected === undefined || affected < 1) throw new Error('VALIDATION_ERROR');
+            const r = d.reservations.find((x) => x.reservationId === reservationId);
+            const has = d.novelties.some((n) => n.type === 'Emergencia personal' && n.reservationId === reservationId);
+            if (!r || r.state !== 'IN_EXECUTION' || affected > r.travelers || has) throw new Error('BUSINESS_RULE_VIOLATION');
+          }
+          const at = fromInstant(new Date().toISOString(), TENANT_TIME_ZONE);
+          d.novelties.push({ at, type: emergency ? 'Emergencia personal' : 'Novedad', detail: text, who, reservationId, affected });
+          d.history.push(log(at, emergency ? 'Emergencia personal' : 'Novedad', text));
         },
         code,
       ),
