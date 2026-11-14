@@ -5,6 +5,7 @@ import type { DepartureExecutionGateway } from './gateway';
 import { FinishPanel } from './FinishPanel';
 import { AddVehiclesPanel } from './AddVehiclesPanel';
 import { CancelDeparturePanel } from './CancelDeparturePanel';
+import { ChangeVehiclesPanel } from './ChangeVehiclesPanel';
 import { CancellationRecord } from './CancellationRecord';
 import { CostsPanel } from './CostsPanel';
 import { HistoryPanel } from './HistoryPanel';
@@ -19,6 +20,7 @@ import { StartPanel } from './StartPanel';
 const DRAWN: Partial<Record<PanelId, ComponentType<PanelProps>>> = {
   departure: DeparturePanel,
   vehicles: AddVehiclesPanel,
+  'change-vehicles': ChangeVehiclesPanel,
   start: StartPanel,
   reservations: ReservationsPanel,
   novelties: NoveltiesPanel,

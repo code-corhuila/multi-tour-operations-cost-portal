@@ -80,6 +80,8 @@ export interface Departure {
   // What the service says of the tour and of the vehicles that are on the departure; the test data leave them out.
   transportRequired?: boolean;
   vehicleIds?: string[];
+  // The capacity of the tour in the catalog; the preview of a change of vehicles needs it (spec 016 D-02).
+  tourCapacity?: number;
   reservations: ReservationService[];
   // Present only on a cancelled departure.
   cancellation?: Cancellation;
@@ -155,6 +157,20 @@ export interface AddVehiclesInput {
   key: string;
 }
 
+export interface ChangeVehiclesInput {
+  code: string;
+  vehicleIds: string[];
+  key: string;
+}
+
+// What the saga change-departure-vehicles answers (its contract), with the departure as it is now when the saga ended.
+export interface VehicleChange {
+  sagaId: string;
+  status: 'RUNNING' | 'COMPLETED' | 'COMPENSATED' | 'FAILED';
+  reason?: string;
+  departure?: Departure;
+}
+
 // The operational costs of a departure (HU-OPS-007). The amounts are minor units; the total is the service's sum of the lines.
 export type CostMode = 'CALCULATED' | 'MANUAL';
 
@@ -207,6 +223,9 @@ export interface DepartureExecutionGateway {
   // Only the adapter of the service has them: the vehicles of the tenant, and adding some to a scheduled departure (HU-OPS-002).
   listVehicles?(): Promise<Vehicle[]>;
   addVehicles?(input: AddVehiclesInput): Promise<Departure>;
+  // HU-OPS-002 part B: the whole new set goes to the saga, which may still be running; its state is read again by its id (spec 016 D-03).
+  changeVehicles?(input: ChangeVehiclesInput): Promise<VehicleChange>;
+  readVehicleChange?(sagaId: string, code: string): Promise<VehicleChange>;
   // The costs of a departure: only the adapter of the service and the test data have them.
   getCosts?(code: string): Promise<CostSheet>;
   recordCost?(input: CostInput): Promise<CostLine>;
