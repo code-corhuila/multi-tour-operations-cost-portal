@@ -44,6 +44,14 @@ describe('validateDeparture', () => {
     expect(validateDeparture({ ...valid, date: '2026-10-18', start: '14:00', end: '18:00', vehicleIds: ['V-1'] }, ctx)).toEqual([]);
   });
 
+  it('U·a_listed_departure_collides_as_an_instant_of_its_own_zone: 06:30 to 07:30 in Mexico City runs into 08:00 in Bogota', async () => {
+    const ctx = await context();
+    const listed = { code: 'SAL-090', tourId: 'T-1', start: '2026-11-02T06:30', end: '2026-11-02T07:30', vehicleIds: ['V-4'], booked: 0, reservations: 0, status: 'SCHEDULED' as const, timeZone: 'America/Mexico_City' };
+    const zoned = { ...ctx, departures: [listed], timeZone: 'America/Bogota' };
+    expect(validateDeparture(valid, zoned)).toEqual([expect.stringContaining('ya está asignado a SAL-090')]);
+    expect(validateDeparture({ ...valid, start: '09:30' }, zoned)).toEqual([]);
+  });
+
   it('U·editing_does_not_collide_with_itself: the departure being edited keeps its own vehicles', async () => {
     const ctx = await context();
     expect(validateDeparture({ ...valid, date: '2026-10-18', start: '08:00', end: '14:00', vehicleIds: ['V-1'], editingCode: 'SAL-018' }, ctx)).toEqual([]);
