@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import type { Departure } from './gateway';
 import type { PanelProps } from './panelProps';
-import { failureText } from './panelProps';
+import { failureText, isAfterNow } from './panelProps';
 import { useRegistration } from './useRegistration';
 
 // Panel "Finalización": the end needs its time and result; an interruption needs its cause (RN-OPS-PT-37).
@@ -19,13 +19,20 @@ export function FinishPanel({ departure, gateway, canManage, onChanged }: PanelP
     if (!finishedAt) next.at = 'Ingresa la hora de finalización real.';
     else if (new Date(finishedAt) < new Date(departure.actualStart ?? departure.scheduledStart))
       next.at = 'La finalización real no puede ser anterior al inicio real ni a la hora programada.';
-    else if (new Date(finishedAt) > new Date()) next.at = 'La finalización real no puede ser posterior a este momento.';
+    else if (isAfterNow(finishedAt, departure.timeZone)) next.at = 'La finalización real no puede ser posterior a este momento.';
     if (result === 'INTERRUPTED' && !cause.trim()) next.cause = 'Ingresa la causa y la evidencia de la interrupción.';
     setErrors(next);
     if (Object.keys(next).length > 0) return;
     let updated: Departure | undefined;
     const ok = await submit(`${departure.code}|${finishedAt}|${result}|${result === 'INTERRUPTED' ? cause.trim() : ''}`, async (key) => {
-      updated = await gateway.registerFinish({ code: departure.code, finishedAt, result, cause: result === 'INTERRUPTED' ? cause.trim() : '', key });
+      updated = await gateway.registerFinish({
+        code: departure.code,
+        finishedAt,
+        result,
+        cause: result === 'INTERRUPTED' ? cause.trim() : '',
+        timeZone: departure.timeZone,
+        key,
+      });
     });
     if (ok && updated) onChanged(updated);
   }

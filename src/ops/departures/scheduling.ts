@@ -12,7 +12,7 @@ import {
   type Vehicle,
   type VehicleInput,
 } from './model';
-import { TENANT_TIME_ZONE, fromInstant, toInstant } from './time';
+import { fromInstant, toInstant } from './time';
 
 interface Failure {
   status?: number;
@@ -51,6 +51,7 @@ interface DeparturePage {
     startAlert: boolean;
     scheduledStart: string;
     scheduledEnd: string;
+    timeZone: string;
     capacity: number;
     booked: number;
     vehicles: { vehicleId: string }[];
@@ -118,11 +119,14 @@ export function createDeparturesGateway(apiClient: ApiClient, rest: DeparturesGa
         for (let page = 1; page <= MAX_PAGES; page++) {
           const answer = await apiClient.request<DeparturePage>(`${DEPARTURES}?limit=100&page=${page}`);
           for (const d of answer.data) {
+            // a departure without its zone is a failure: a guessed zone would list it at another hour
+            if (!d.timeZone) throw new Failed();
             rows.push({
               code: d.code,
               tourId: d.serviceId,
-              start: fromInstant(d.scheduledStart, TENANT_TIME_ZONE),
-              end: fromInstant(d.scheduledEnd, TENANT_TIME_ZONE),
+              start: fromInstant(d.scheduledStart, d.timeZone),
+              end: fromInstant(d.scheduledEnd, d.timeZone),
+              timeZone: d.timeZone,
               vehicleIds: d.vehicles.map((v) => v.vehicleId),
               booked: d.booked,
               reservations: 0,
@@ -172,7 +176,7 @@ export function createDeparturesGateway(apiClient: ApiClient, rest: DeparturesGa
           },
         );
         const assigned = (answer.vehicles ?? []).map((v) => v.vehicleId);
-        return { code: answer.code, tourId, start, end, vehicleIds: assigned, booked: answer.booked, reservations: 0, status: answer.status };
+        return { code: answer.code, tourId, start, end, timeZone, vehicleIds: assigned, booked: answer.booked, reservations: 0, status: answer.status };
       } catch (error) {
         throw translate(error);
       }

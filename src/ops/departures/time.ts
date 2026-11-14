@@ -1,4 +1,4 @@
-// shortcut: one zone for every tenant of the course (spec 006 G-1); drop it when a tenant exposes its own zone.
+// The zone of the test data only (spec 015 D-03): the service answers the zone of each departure and the tenant its own.
 export const TENANT_TIME_ZONE = 'America/Bogota';
 
 const WALL_CLOCK = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/;

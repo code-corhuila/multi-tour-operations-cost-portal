@@ -19,6 +19,7 @@ const answer = (extra: Record<string, unknown> = {}) => ({
   status: 'SCHEDULED',
   scheduledStart: '2026-12-01T13:00:00Z',
   scheduledEnd: '2026-12-01T21:00:00Z',
+  timeZone: 'America/Bogota',
   capacity: 12,
   booked: 0,
   pendingRegularization: false,

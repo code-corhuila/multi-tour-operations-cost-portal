@@ -26,6 +26,7 @@ const created = {
   status: 'SCHEDULED',
   scheduledStart: '2026-12-01T13:00:00Z',
   scheduledEnd: '2026-12-01T19:00:00Z',
+  timeZone: 'America/Bogota',
   capacity: 11,
   booked: 0,
   vehicles: [],
@@ -168,6 +169,7 @@ const row = (n: number, extra: Record<string, unknown> = {}) => ({
   status: 'SCHEDULED',
   scheduledStart: '2026-12-01T13:00:00Z',
   scheduledEnd: '2026-12-01T21:00:00Z',
+  timeZone: 'America/Bogota',
   capacity: 12,
   booked: 4,
   pendingRegularization: false,
@@ -178,6 +180,11 @@ const row = (n: number, extra: Record<string, unknown> = {}) => ({
 });
 
 describe('the list of departures (spec 008 PT8-01)', () => {
+  it('C·a_listed_departure_without_its_zone_is_a_failure', async () => {
+    const { client } = fakeClient(() => page([row(21), row(22, { timeZone: undefined })], 1, 1));
+    await expect(createDeparturesGateway(client, createDeparturesFixture()).listDepartures()).rejects.toBeInstanceOf(Failed);
+  });
+
   it('C·the_departures_are_read_from_the_service_and_mapped_to_the_wall_clock_of_the_tenant', async () => {
     const { client, calls } = fakeClient(() => page([row(21), row(22, { status: 'IN_EXECUTION', vehicles: [] })], 1, 1));
     const gateway = createDeparturesGateway(client, createDeparturesFixture());
@@ -185,8 +192,8 @@ describe('the list of departures (spec 008 PT8-01)', () => {
     expect(calls).toHaveLength(1);
     expect(calls[0].path).toBe('/api/v1/operations-cost/departures?limit=100&page=1');
     expect(rows).toEqual([
-      { code: 'SAL-021', tourId: 'id-21', start: '2026-12-01T08:00', end: '2026-12-01T16:00', vehicleIds: ['veh-1'], booked: 4, reservations: 0, status: 'SCHEDULED', pendingRegularization: false, startAlert: false, capacity: 12 },
-      { code: 'SAL-022', tourId: 'id-22', start: '2026-12-01T08:00', end: '2026-12-01T16:00', vehicleIds: [], booked: 4, reservations: 0, status: 'IN_EXECUTION', pendingRegularization: false, startAlert: false, capacity: 12 },
+      { code: 'SAL-021', tourId: 'id-21', start: '2026-12-01T08:00', end: '2026-12-01T16:00', timeZone: 'America/Bogota', vehicleIds: ['veh-1'], booked: 4, reservations: 0, status: 'SCHEDULED', pendingRegularization: false, startAlert: false, capacity: 12 },
+      { code: 'SAL-022', tourId: 'id-22', start: '2026-12-01T08:00', end: '2026-12-01T16:00', timeZone: 'America/Bogota', vehicleIds: [], booked: 4, reservations: 0, status: 'IN_EXECUTION', pendingRegularization: false, startAlert: false, capacity: 12 },
     ]);
   });
 
