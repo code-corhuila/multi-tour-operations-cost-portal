@@ -38,6 +38,17 @@ export interface ExtraordinaryCancellation {
   recordedAt: string;
 }
 
+export type CancellationCause = 'NOT_ATTRIBUTABLE_TO_CUSTOMER' | 'NOT_CARRIED_OUT';
+
+// Since contract 0.11.0 (HU-OPS-006): when, by whom when a person did, why and, for a departure that was not carried out, the reason;
+// the time is the wall clock of the tenant.
+export interface Cancellation {
+  at: string;
+  by?: string;
+  cause: CancellationCause;
+  reason?: string;
+}
+
 export interface Novelty {
   at: string;
   type: 'Novedad' | 'Emergencia personal';
@@ -69,6 +80,8 @@ export interface Departure {
   transportRequired?: boolean;
   vehicleIds?: string[];
   reservations: ReservationService[];
+  // Present only on a cancelled departure.
+  cancellation?: Cancellation;
   // The real base: the travelers served of the delivered reservations; absent when the reservations could not be read.
   travelersServed?: number;
   // True when the service answered the departure without its reservations because it could not read them (api 006 D-04).
@@ -93,6 +106,11 @@ export interface ExtraordinaryCancellationInput {
   code: string;
   reservationId: string;
   justification: string;
+  key: string;
+}
+
+export interface CancelDepartureInput {
+  code: string;
   key: string;
 }
 
@@ -180,6 +198,8 @@ export interface DepartureExecutionGateway {
   recordExtraordinaryCancellation(input: ExtraordinaryCancellationInput): Promise<Departure>;
   registerFinish(input: FinishInput): Promise<Departure>;
   registerRegularization(input: RegularizationInput): Promise<Departure>;
+  // HU-OPS-006: asks the saga that cancels a scheduled departure and handles its reservations; the answer is the departure as it is now.
+  cancelDeparture?(input: CancelDepartureInput): Promise<Departure>;
   // Only the adapter of the service has them: the vehicles of the tenant, and adding some to a scheduled departure (HU-OPS-002).
   listVehicles?(): Promise<Vehicle[]>;
   addVehicles?(input: AddVehiclesInput): Promise<Departure>;
