@@ -23,6 +23,7 @@ const departure = (extra: Record<string, unknown> = {}) => ({
   status: 'IN_EXECUTION',
   scheduledStart: '2026-12-01T13:00:00Z',
   scheduledEnd: '2026-12-01T21:00:00Z',
+  timeZone: 'America/Bogota',
   capacity: 12,
   booked: 5,
   pendingRegularization: false,
@@ -48,6 +49,7 @@ describe('the connected execution gateway', () => {
       booked: 5,
       scheduledStart: '2026-12-01T08:00',
       scheduledEnd: '2026-12-01T16:00',
+      timeZone: 'America/Bogota',
       actualStart: '2026-12-01T08:07',
       reservations: [],
       novelties: [],
@@ -70,6 +72,11 @@ describe('the connected execution gateway', () => {
     expect(calls[0].path).toBe('/api/v1/operations-cost/departures/SAL-031%2F..%2Fvehicles%3Fx%3D1%23y');
   });
 
+  it('C·a_departure_without_its_zone_is_a_failure', async () => {
+    const { client } = fakeClient(() => departure({ timeZone: undefined }));
+    await expect(createExecutionGateway(client).getDeparture('SAL-031')).rejects.toBeInstanceOf(Failed);
+  });
+
   it('C·a_failure_with_no_status_is_a_failure_and_not_a_missing_departure', async () => {
     await expect(failing(new Error('boom')).getDeparture('SAL-031')).rejects.toBeInstanceOf(Failed);
     await expect(failing({ code: 'TIMEOUT' }).getDeparture('SAL-031')).rejects.toBeInstanceOf(Unavailable);
@@ -77,7 +84,7 @@ describe('the connected execution gateway', () => {
 
   it('C·the_start_is_sent_as_an_instant_with_its_key_and_the_answer_is_the_departure', async () => {
     const { client, calls } = fakeClient(() => departure({ status: 'IN_EXECUTION', actualStart: '2026-12-01T13:10:00Z' }));
-    const read = await createExecutionGateway(client).registerStart({ code: 'SAL-031', startedAt: '2026-12-01T08:10', key: 'start-key-0001' });
+    const read = await createExecutionGateway(client).registerStart({ code: 'SAL-031', timeZone: 'America/Bogota', startedAt: '2026-12-01T08:10', key: 'start-key-0001' });
     expect(calls).toEqual([
       {
         path: '/api/v1/operations-cost/departures/SAL-031/executions',
@@ -91,8 +98,8 @@ describe('the connected execution gateway', () => {
   it('C·the_end_carries_its_result_and_only_an_interruption_carries_its_cause', async () => {
     const { client, calls } = fakeClient(() => departure({ status: 'FINISHED', actualEnd: '2026-12-01T19:00:00Z' }));
     const gateway = createExecutionGateway(client);
-    await gateway.registerFinish({ code: 'SAL-031', finishedAt: '2026-12-01T14:00', result: 'FINISHED', cause: '', key: 'finish-key-001' });
-    await gateway.registerFinish({ code: 'SAL-031', finishedAt: '2026-12-01T14:00', result: 'INTERRUPTED', cause: 'Heavy rain', key: 'finish-key-002' });
+    await gateway.registerFinish({ code: 'SAL-031', timeZone: 'America/Bogota', finishedAt: '2026-12-01T14:00', result: 'FINISHED', cause: '', key: 'finish-key-001' });
+    await gateway.registerFinish({ code: 'SAL-031', timeZone: 'America/Bogota', finishedAt: '2026-12-01T14:00', result: 'INTERRUPTED', cause: 'Heavy rain', key: 'finish-key-002' });
     expect(calls.filter((c) => c.path.endsWith('/finish'))).toHaveLength(2);
     expect(calls[0].init).toEqual({
       method: 'POST',
@@ -103,7 +110,7 @@ describe('the connected execution gateway', () => {
   });
 
   it('C·a_refused_recording_is_translated_by_its_status', async () => {
-    const start = { code: 'SAL-031', startedAt: '2026-12-01T08:10', key: 'start-key-0001' };
+    const start = { code: 'SAL-031', timeZone: 'America/Bogota', startedAt: '2026-12-01T08:10', key: 'start-key-0001' };
     await expect(failing({ status: 422, code: 'BUSINESS_RULE_VIOLATION' }).registerStart(start)).rejects.toBeInstanceOf(Refused);
     await expect(failing({ status: 422, code: 'INVALID_STATUS_TRANSITION' }).registerStart(start)).rejects.toBeInstanceOf(Refused);
     await expect(failing({ status: 403 }).registerStart(start)).rejects.toBeInstanceOf(Forbidden);
@@ -114,8 +121,8 @@ describe('the connected execution gateway', () => {
   it('C·a_wall_clock_that_cannot_be_converted_is_refused_before_anything_is_sent', async () => {
     const { client, calls } = fakeClient(() => departure());
     const gateway = createExecutionGateway(client);
-    await expect(gateway.registerStart({ code: 'SAL-031', startedAt: '12026-12-01T08:10', key: 'start-key-0001' })).rejects.toBeInstanceOf(Failed);
-    await expect(gateway.registerFinish({ code: 'SAL-031', finishedAt: 'x', result: 'FINISHED', cause: '', key: 'finish-key-001' })).rejects.toBeInstanceOf(Failed);
+    await expect(gateway.registerStart({ code: 'SAL-031', timeZone: 'America/Bogota', startedAt: '12026-12-01T08:10', key: 'start-key-0001' })).rejects.toBeInstanceOf(Failed);
+    await expect(gateway.registerFinish({ code: 'SAL-031', timeZone: 'America/Bogota', finishedAt: 'x', result: 'FINISHED', cause: '', key: 'finish-key-001' })).rejects.toBeInstanceOf(Failed);
     expect(calls).toHaveLength(0);
   });
 
@@ -394,6 +401,7 @@ describe('the connected execution gateway', () => {
     const { client, calls } = fakeClient(() => departure({ status: 'CANCELLED', reservations: [] }));
     await createExecutionGateway(client).registerRegularization({
       code: 'SAL-031',
+      timeZone: 'America/Bogota',
       result: 'NOT_DONE',
       startedAt: '2026-12-01T08:00',
       finishedAt: '2026-12-01T16:00',

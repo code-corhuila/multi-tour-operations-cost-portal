@@ -8,7 +8,7 @@ const catalog = {
   meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
 };
 const noVehicles = { data: [], meta: { page: 1, limit: 100, total: 0, totalPages: 1 } };
-const created = { code: 'SAL-031', status: 'SCHEDULED', scheduledStart: '2026-12-01T13:00:00Z', scheduledEnd: '2026-12-01T19:00:00Z', capacity: 12, booked: 0 };
+const created = { code: 'SAL-031', status: 'SCHEDULED', scheduledStart: '2026-12-01T13:00:00Z', scheduledEnd: '2026-12-01T19:00:00Z', timeZone: 'America/Bogota', capacity: 12, booked: 0 };
 const listed = {
   data: [{ ...created, serviceId: 'svc-1', pendingRegularization: false, interrupted: false, vehicles: [] }],
   meta: { page: 1, limit: 100, total: 1, totalPages: 1 },

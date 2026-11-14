@@ -32,7 +32,15 @@ describe('the cancellation of a departure on the test data', () => {
 
   it('U·not_performed_cancels_a_marked_departure_with_its_cause_and_an_empty_or_long_cause_is_refused', async () => {
     const gateway = createDepartureFixture();
-    const base = { code: 'SAL-014', result: 'NOT_DONE' as const, startedAt: '', finishedAt: '', earlyStartMotive: '', interruption: '' };
+    const base = {
+      code: 'SAL-014',
+      timeZone: 'America/Bogota',
+      result: 'NOT_DONE' as const,
+      startedAt: '',
+      finishedAt: '',
+      earlyStartMotive: '',
+      interruption: '',
+    };
     await expect(gateway.registerRegularization({ ...base, notDoneCause: '  ', key: 'k-1' })).rejects.toThrow('VALIDATION_ERROR');
     await expect(gateway.registerRegularization({ ...base, notDoneCause: 'r'.repeat(501), key: 'k-2' })).rejects.toThrow('VALIDATION_ERROR');
     const answered = await gateway.registerRegularization({ ...base, notDoneCause: ' Nadie llegó al punto de encuentro ', key: 'k-3' });

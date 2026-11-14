@@ -56,8 +56,8 @@ describe('departure execution page', () => {
 
   it('U·start_is_refused_unless_the_departure_is_scheduled: an executing departure cannot be started again', async () => {
     const gateway = createDepartureFixture();
-    await expect(gateway.registerStart({ code: 'SAL-021', startedAt: '2026-10-14T09:00', key: 'k-refused' })).rejects.toThrow('INVALID_STATUS_TRANSITION');
-    await expect(gateway.registerStart({ code: 'SAL-018', startedAt: '2026-10-18T08:30', key: 'k-ok' })).resolves.toMatchObject({ status: 'IN_EXECUTION' });
+    await expect(gateway.registerStart({ code: 'SAL-021', timeZone: 'America/Bogota', startedAt: '2026-10-14T09:00', key: 'k-refused' })).rejects.toThrow('INVALID_STATUS_TRANSITION');
+    await expect(gateway.registerStart({ code: 'SAL-018', timeZone: 'America/Bogota', startedAt: '2026-10-18T08:30', key: 'k-ok' })).resolves.toMatchObject({ status: 'IN_EXECUTION' });
   });
 
   it('U·forms_are_disabled_without_the_permission: the note shows and the start cannot be sent', async () => {
@@ -199,6 +199,7 @@ describe('departure execution page over the service (spec 008)', () => {
       booked: 5,
       scheduledStart: '2026-12-01T08:00',
       scheduledEnd: '2026-12-01T16:00',
+      timeZone: 'America/Bogota',
       actualStart: '2026-12-01T08:07',
       actualEnd: '2026-12-01T14:00',
       mark: 'Interrumpida',
@@ -252,6 +253,7 @@ describe('start and end over the service (spec 008)', () => {
     status,
     scheduledStart: '2026-12-01T13:00:00Z',
     scheduledEnd: '2026-12-01T21:00:00Z',
+    timeZone: 'America/Bogota',
     capacity: 12,
     booked: 0,
     pendingRegularization: false,
@@ -401,6 +403,7 @@ describe('adding vehicles to a departure over the service (spec 008)', () => {
     status,
     scheduledStart: '2026-12-01T13:00:00Z',
     scheduledEnd: '2026-12-01T21:00:00Z',
+    timeZone: 'America/Bogota',
     capacity,
     booked,
     transportRequired,
