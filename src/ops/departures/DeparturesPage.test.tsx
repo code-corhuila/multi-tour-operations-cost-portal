@@ -160,4 +160,15 @@ describe('departures list over the service (spec 008)', () => {
     expect(listVehicles).not.toHaveBeenCalled();
     expect(screen.queryByText('No pudimos cargar las salidas')).not.toBeInTheDocument();
   });
+
+  it('U·collaborator_is_not_told_a_departure_has_no_vehicles: it cannot read them, so the cell shows a dash', async () => {
+    const base = createDeparturesFixture();
+    const departures = await base.listDepartures();
+    const withVehicles = departures.find((d) => d.vehicleIds.length > 0);
+    expect(withVehicles).toBeDefined();
+    setup({ admin: false, gateway: { ...base, listVehicles: vi.fn().mockRejectedValue(new Error('403')) } });
+    const cells = within(await row(withVehicles!.code)).getAllByRole('cell').map((c) => c.textContent);
+    expect(cells).not.toContain('Sin vehículos');
+    expect(cells).toContain('—');
+  });
 });
