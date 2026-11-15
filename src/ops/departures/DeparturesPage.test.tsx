@@ -119,7 +119,17 @@ describe('departures list over the service (spec 008)', () => {
     ...createDeparturesFixture(),
     connected: true,
     listDepartures: async () => [
-      { code: 'SAL-031', tourId: 'tour-1', start: '2026-12-01T08:00', end: '2026-12-01T16:00', vehicleIds: [], booked: 3, reservations: 0, status: 'SCHEDULED', capacity: 9 },
+      {
+        code: 'SAL-031',
+        tourId: 'tour-1',
+        start: '2026-12-01T08:00',
+        end: '2026-12-01T16:00',
+        vehicleIds: [],
+        booked: 3,
+        reservations: 0,
+        status: 'SCHEDULED',
+        capacity: 9,
+      },
     ],
     listTours: async () => [{ id: 'tour-1', name: 'Cañón del río', capacity: 18, needsTransport: true }],
     listVehicles: async () => [],
