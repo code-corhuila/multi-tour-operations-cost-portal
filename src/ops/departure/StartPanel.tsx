@@ -1,22 +1,24 @@
 import { useState, type FormEvent } from 'react';
 import type { Departure } from './gateway';
 import type { PanelProps } from './panelProps';
+import { failureText, isAfterNow } from './panelProps';
 import { useRegistration } from './useRegistration';
 
 // Panel "Inicio de la salida": the real start, required and not before the scheduled one (RN-OPS-PT-32, -33).
 export function StartPanel({ departure, gateway, canManage, onChanged }: PanelProps) {
   const [value, setValue] = useState('');
   const [error, setError] = useState<string>();
-  const { sending, failed, submit } = useRegistration();
+  const { sending, failed, error: failure, submit } = useRegistration();
 
   async function send(event?: FormEvent) {
     event?.preventDefault();
     if (!value) return setError('Ingresa la hora de inicio real.');
     if (new Date(value) < new Date(departure.scheduledStart)) return setError('El inicio real no puede ser anterior a la hora programada.');
+    if (isAfterNow(value, departure.timeZone)) return setError('El inicio real no puede ser posterior a este momento.');
     setError(undefined);
     let updated: Departure | undefined;
     const ok = await submit(`${departure.code}|${value}`, async (key) => {
-      updated = await gateway.registerStart({ code: departure.code, startedAt: value, key });
+      updated = await gateway.registerStart({ code: departure.code, startedAt: value, timeZone: departure.timeZone, key });
     });
     if (ok && updated) onChanged(updated);
   }
@@ -27,10 +29,9 @@ export function StartPanel({ departure, gateway, canManage, onChanged }: PanelPr
       <p className="operator-eyebrow">Inicio de la salida</p>
       <h2 id="start-title">Registrar el inicio real</h2>
       <p className="operator-copy">
-        Se registra después del control operativo previo realizado por el guía. El inicio real no puede ser anterior a la hora
-        programada. Al registrarlo pasan a En ejecución las reservas Confirmadas con Pago completo; las que tengan pagos o saldos
-        pendientes, o un comprobante aún En validación, se cancelan por incumplimiento del pago y liberan su cupo. Un retraso en el
-        inicio no extiende los plazos económicos.
+        Se registra después del control operativo previo realizado por el guía. El inicio real no puede ser anterior a la hora programada. Al registrarlo pasan
+        a En ejecución las reservas Confirmadas con Pago completo; las que tengan pagos o saldos pendientes, o un comprobante aún En validación, se cancelan por
+        incumplimiento del pago y liberan su cupo. Un retraso en el inicio no extiende los plazos económicos.
       </p>
       <form className="operator-form-grid" onSubmit={send} noValidate>
         <div>
@@ -59,7 +60,7 @@ export function StartPanel({ departure, gateway, canManage, onChanged }: PanelPr
       </form>
       {failed && (
         <div role="alert">
-          <p className="operator-form-feedback is-error">No pudimos registrar el inicio. Tus datos siguen aquí.</p>
+          <p className="operator-form-feedback is-error">{failureText(failure, 'el inicio')}</p>
           <button type="button" className="operator-outline" disabled={locked} onClick={() => void send()}>
             Reintentar
           </button>

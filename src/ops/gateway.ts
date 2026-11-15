@@ -30,4 +30,3 @@ export interface CostInput {
   concept: string;
   amountCents: number;
 }
-

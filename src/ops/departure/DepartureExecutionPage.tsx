@@ -3,6 +3,11 @@ import { useAsync } from '../useAsync';
 import { DeparturePanel } from './DeparturePanel';
 import type { DepartureExecutionGateway } from './gateway';
 import { FinishPanel } from './FinishPanel';
+import { AddVehiclesPanel } from './AddVehiclesPanel';
+import { CancelDeparturePanel } from './CancelDeparturePanel';
+import { ChangeVehiclesPanel } from './ChangeVehiclesPanel';
+import { CancellationRecord } from './CancellationRecord';
+import { CostsPanel } from './CostsPanel';
 import { HistoryPanel } from './HistoryPanel';
 import { NoveltiesPanel } from './NoveltiesPanel';
 import { ReservationsPanel } from './ReservationsPanel';
@@ -14,11 +19,16 @@ import { StartPanel } from './StartPanel';
 // Panels already drawn; each task adds its own entries (a panel the status asks for and not drawn yet is skipped).
 const DRAWN: Partial<Record<PanelId, ComponentType<PanelProps>>> = {
   departure: DeparturePanel,
+  vehicles: AddVehiclesPanel,
+  'change-vehicles': ChangeVehiclesPanel,
   start: StartPanel,
   reservations: ReservationsPanel,
   novelties: NoveltiesPanel,
   finish: FinishPanel,
+  costs: CostsPanel,
   regularize: RegularizePanel,
+  cancel: CancelDeparturePanel,
+  cancellation: CancellationRecord,
   history: HistoryPanel,
 };
 
@@ -26,11 +36,12 @@ interface Props {
   gateway: DepartureExecutionGateway;
   code: string;
   canManage: boolean;
+  canSchedule?: boolean;
   onBack: () => void;
 }
 
 // Page of the Mockup admin-registrar-ejecucion.html (spec 004): the whole life of one departure in one place.
-export function DepartureExecutionPage({ gateway, code, canManage, onBack }: Props) {
+export function DepartureExecutionPage({ gateway, code, canManage, canSchedule, onBack }: Props) {
   const load = useMemo(() => () => gateway.getDeparture(code), [gateway, code]);
   const { state, retry, set } = useAsync(load);
 
@@ -48,10 +59,12 @@ export function DepartureExecutionPage({ gateway, code, canManage, onBack }: Pro
   } else if (!state.data) body = <p className="operator-copy">No encontramos esta salida.</p>;
   else {
     const departure = state.data;
-    body = panelsFor(departure.status).map((id) => {
-      const Panel = DRAWN[id];
-      return Panel && <Panel key={id} departure={departure} gateway={gateway} canManage={canManage} onChanged={set} />;
-    });
+    body = panelsFor(departure.status, departure.pendingRegularization)
+      .filter((id) => !gateway.panels || gateway.panels.includes(id))
+      .map((id) => {
+        const Panel = DRAWN[id];
+        return Panel && <Panel key={id} departure={departure} gateway={gateway} canManage={canManage} canSchedule={canSchedule} onChanged={set} />;
+      });
   }
 
   return (
@@ -65,11 +78,11 @@ export function DepartureExecutionPage({ gateway, code, canManage, onBack }: Pro
           Volver a salidas
         </button>
       </header>
-      <p className="operator-eyebrow">Datos de prueba</p>
+      {!gateway.connected && <p className="operator-eyebrow">Datos de prueba</p>}
       {!canManage && (
         <p className="operator-access-note">
-          Tu usuario no tiene el permiso Gestionar ejecución de salidas: puedes consultar la salida, pero no registrar inicio,
-          finalización, novedades ni regularizaciones.
+          Tu usuario no tiene el permiso Gestionar ejecución de salidas: puedes consultar la salida, pero no registrar inicio, finalización, novedades ni
+          regularizaciones.
         </p>
       )}
       {body}

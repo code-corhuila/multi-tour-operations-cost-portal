@@ -1,11 +1,41 @@
+import { Forbidden, Refused } from '../departures/model';
+import { toInstant } from '../departures/time';
 import type { Departure, DepartureExecutionGateway } from './gateway';
 
 export interface PanelProps {
   departure: Departure;
   gateway: DepartureExecutionGateway;
   canManage: boolean;
+  // Only the Administrator schedules and gives vehicles to a departure (RN-OPS-PT-58).
+  canSchedule?: boolean;
   onChanged: (departure: Departure) => void;
+}
+
+// What a panel says when a recording failed: a refusal of the service is told as such (the body and the trace id never are), and the
+// person keeps their data in every case.
+export function failureText(error: unknown, what: string, hours = true): string {
+  if (error instanceof Refused) {
+    const reason =
+      error.code === 'INVALID_STATUS_TRANSITION'
+        ? 'la salida ya no está en el estado que esperaba este registro; vuelve a abrirla para ver cómo quedó'
+        : hours
+          ? 'la hora está fuera de lo permitido (no antes del inicio ni en el futuro)'
+          : 'la salida no admite este registro';
+    return `El servicio no aceptó ${what}: ${reason}. Tus datos siguen aquí.`;
+  }
+  if (error instanceof Forbidden) return 'Tu usuario no tiene el permiso Gestionar ejecución de salidas. Tus datos siguen aquí.';
+  return `No pudimos registrar ${what}. Tus datos siguen aquí.`;
 }
 
 // The page shows the wall-clock strings as the service gives them.
 export const showTime = (value?: string) => (value ? value.replace('T', ' ') : '—');
+
+/** Whether a wall clock of `zone` is later than `now`: the hour is of the zone of the departure, never of the browser. */
+export function isAfterNow(wall: string, zone: string, now = Date.now()): boolean {
+  try {
+    return Date.parse(toInstant(wall, zone)) > now;
+  } catch {
+    // a wall clock that cannot be converted is told by the gateway, which refuses it before anything is sent
+    return false;
+  }
+}

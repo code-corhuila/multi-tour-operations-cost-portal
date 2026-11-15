@@ -1,0 +1,484 @@
+import { describe, expect, it } from 'vitest';
+import type { ApiClient } from '../../contract';
+import { FieldError, Failed, Forbidden, Refused, Unavailable } from '../departures/model';
+import { createExecutionGateway } from './execution';
+
+type Call = { path: string; init?: unknown };
+
+function fakeClient(answer: (call: Call) => unknown): { client: ApiClient; calls: Call[] } {
+  const calls: Call[] = [];
+  const client: ApiClient = {
+    request: async <T>(path: string, init?: unknown) => {
+      const call = { path, init };
+      calls.push(call);
+      return answer(call) as T;
+    },
+  };
+  return { client, calls };
+}
+
+const departure = (extra: Record<string, unknown> = {}) => ({
+  code: 'SAL-031',
+  serviceId: 'tour-1',
+  status: 'IN_EXECUTION',
+  scheduledStart: '2026-12-01T13:00:00Z',
+  scheduledEnd: '2026-12-01T21:00:00Z',
+  timeZone: 'America/Bogota',
+  capacity: 12,
+  booked: 5,
+  pendingRegularization: false,
+  actualStart: '2026-12-01T13:07:00Z',
+  interrupted: false,
+  vehicles: [{ vehicleId: 'veh-1', name: 'Van', capacity: 12 }],
+  ...extra,
+});
+
+const failing = (error: unknown) => createExecutionGateway({ request: () => Promise.reject(error) } as unknown as ApiClient);
+
+// Spec 008 PT8-02 (AC-PT-08.2, -08.8): the page of one departure reads the service.
+describe('the connected execution gateway', () => {
+  it('C·a_departure_is_read_from_the_service_and_its_times_are_the_wall_clock_of_the_tenant', async () => {
+    const { client, calls } = fakeClient(() => departure());
+    const read = await createExecutionGateway(client).getDeparture('SAL-031');
+    expect(calls.map((c) => c.path)).toEqual(['/api/v1/operations-cost/departures/SAL-031']);
+    expect(read).toMatchObject({
+      code: 'SAL-031',
+      status: 'IN_EXECUTION',
+      vehicles: ['Van'],
+      capacity: 12,
+      booked: 5,
+      scheduledStart: '2026-12-01T08:00',
+      scheduledEnd: '2026-12-01T16:00',
+      timeZone: 'America/Bogota',
+      actualStart: '2026-12-01T08:07',
+      reservations: [],
+      novelties: [],
+      history: [],
+    });
+    expect(read?.actualEnd).toBeUndefined();
+  });
+
+  it('C·an_interruption_is_shown_with_its_cause', async () => {
+    const { client } = fakeClient(() =>
+      departure({ status: 'FINISHED', actualEnd: '2026-12-01T19:00:00Z', interrupted: true, interruptionCause: 'Heavy rain closed the trail' }),
+    );
+    const read = await createExecutionGateway(client).getDeparture('SAL-031');
+    expect(read).toMatchObject({ status: 'FINISHED', actualEnd: '2026-12-01T14:00', mark: 'Interrumpida', interruptionCause: 'Heavy rain closed the trail' });
+  });
+
+  it('C·a_code_is_encoded_in_the_path_so_it_cannot_change_the_url', async () => {
+    const { client, calls } = fakeClient(() => departure());
+    await createExecutionGateway(client).getDeparture('SAL-031/../vehicles?x=1#y');
+    expect(calls[0].path).toBe('/api/v1/operations-cost/departures/SAL-031%2F..%2Fvehicles%3Fx%3D1%23y');
+  });
+
+  it('C·a_departure_without_its_zone_is_a_failure', async () => {
+    const { client } = fakeClient(() => departure({ timeZone: undefined }));
+    await expect(createExecutionGateway(client).getDeparture('SAL-031')).rejects.toBeInstanceOf(Failed);
+  });
+
+  it('C·a_failure_with_no_status_is_a_failure_and_not_a_missing_departure', async () => {
+    await expect(failing(new Error('boom')).getDeparture('SAL-031')).rejects.toBeInstanceOf(Failed);
+    await expect(failing({ code: 'TIMEOUT' }).getDeparture('SAL-031')).rejects.toBeInstanceOf(Unavailable);
+  });
+
+  it('C·the_start_is_sent_as_an_instant_with_its_key_and_the_answer_is_the_departure', async () => {
+    const { client, calls } = fakeClient(() => departure({ status: 'IN_EXECUTION', actualStart: '2026-12-01T13:10:00Z' }));
+    const read = await createExecutionGateway(client).registerStart({ code: 'SAL-031', timeZone: 'America/Bogota', startedAt: '2026-12-01T08:10', key: 'start-key-0001' });
+    expect(calls).toEqual([
+      {
+        path: '/api/v1/operations-cost/departures/SAL-031/executions',
+        init: { method: 'POST', headers: { 'Idempotency-Key': 'start-key-0001' }, body: { startedAt: '2026-12-01T13:10:00Z' } },
+      },
+      { path: '/api/v1/operations-cost/departures/SAL-031', init: undefined },
+    ]);
+    expect(read).toMatchObject({ status: 'IN_EXECUTION', actualStart: '2026-12-01T08:10' });
+  });
+
+  it('C·the_end_carries_its_result_and_only_an_interruption_carries_its_cause', async () => {
+    const { client, calls } = fakeClient(() => departure({ status: 'FINISHED', actualEnd: '2026-12-01T19:00:00Z' }));
+    const gateway = createExecutionGateway(client);
+    await gateway.registerFinish({ code: 'SAL-031', timeZone: 'America/Bogota', finishedAt: '2026-12-01T14:00', result: 'FINISHED', cause: '', key: 'finish-key-001' });
+    await gateway.registerFinish({ code: 'SAL-031', timeZone: 'America/Bogota', finishedAt: '2026-12-01T14:00', result: 'INTERRUPTED', cause: 'Heavy rain', key: 'finish-key-002' });
+    expect(calls.filter((c) => c.path.endsWith('/finish'))).toHaveLength(2);
+    expect(calls[0].init).toEqual({
+      method: 'POST',
+      headers: { 'Idempotency-Key': 'finish-key-001' },
+      body: { finishedAt: '2026-12-01T19:00:00Z', result: 'FINISHED' },
+    });
+    expect(calls.filter((c) => c.path.endsWith('/finish'))[1].init).toMatchObject({ body: { result: 'INTERRUPTED', cause: 'Heavy rain' } });
+  });
+
+  it('C·a_refused_recording_is_translated_by_its_status', async () => {
+    const start = { code: 'SAL-031', timeZone: 'America/Bogota', startedAt: '2026-12-01T08:10', key: 'start-key-0001' };
+    await expect(failing({ status: 422, code: 'BUSINESS_RULE_VIOLATION' }).registerStart(start)).rejects.toBeInstanceOf(Refused);
+    await expect(failing({ status: 422, code: 'INVALID_STATUS_TRANSITION' }).registerStart(start)).rejects.toBeInstanceOf(Refused);
+    await expect(failing({ status: 403 }).registerStart(start)).rejects.toBeInstanceOf(Forbidden);
+    await expect(failing({ status: 503 }).registerStart(start)).rejects.toBeInstanceOf(Unavailable);
+    await expect(failing({ status: 400 }).registerStart(start)).rejects.toBeInstanceOf(FieldError);
+  });
+
+  it('C·a_wall_clock_that_cannot_be_converted_is_refused_before_anything_is_sent', async () => {
+    const { client, calls } = fakeClient(() => departure());
+    const gateway = createExecutionGateway(client);
+    await expect(gateway.registerStart({ code: 'SAL-031', timeZone: 'America/Bogota', startedAt: '12026-12-01T08:10', key: 'start-key-0001' })).rejects.toBeInstanceOf(Failed);
+    await expect(gateway.registerFinish({ code: 'SAL-031', timeZone: 'America/Bogota', finishedAt: 'x', result: 'FINISHED', cause: '', key: 'finish-key-001' })).rejects.toBeInstanceOf(Failed);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('C·the_vehicles_of_the_tenant_are_read_page_by_page_and_the_departure_says_which_it_has_and_whether_its_tour_needs_transport', async () => {
+    const { client, calls } = fakeClient((call) =>
+      call.path.includes('/vehicles')
+        ? { data: [{ vehicleId: 'veh-1', name: 'Van', capacity: 12 }, { vehicleId: 'veh-2', name: 'Bus', capacity: 30 }], meta: { totalPages: 1 } }
+        : departure({ transportRequired: true }),
+    );
+    const gateway = createExecutionGateway(client);
+    expect(await gateway.listVehicles!()).toEqual([
+      { id: 'veh-1', name: 'Van', capacity: 12 },
+      { id: 'veh-2', name: 'Bus', capacity: 30 },
+    ]);
+    expect(calls[0].path).toBe('/api/v1/operations-cost/vehicles?limit=100&page=1');
+    expect(await gateway.getDeparture('SAL-031')).toMatchObject({ transportRequired: true, vehicleIds: ['veh-1'] });
+  });
+
+  it('C·adding_vehicles_posts_the_ids_to_the_departure_and_answers_the_departure', async () => {
+    const { client, calls } = fakeClient(() => departure({ capacity: 18, vehicles: [{ vehicleId: 'veh-1', name: 'Van', capacity: 12 }, { vehicleId: 'veh-2', name: 'Bus', capacity: 30 }] }));
+    const read = await createExecutionGateway(client).addVehicles!({ code: 'SAL-031', vehicleIds: ['veh-2'], key: 'vehicles-key-1' });
+    expect(calls).toEqual([
+      {
+        path: '/api/v1/operations-cost/departures/SAL-031/vehicles',
+        init: { method: 'POST', headers: { 'Idempotency-Key': 'vehicles-key-1' }, body: { vehicleIds: ['veh-2'] } },
+      },
+      { path: '/api/v1/operations-cost/departures/SAL-031', init: undefined },
+    ]);
+    expect(read).toMatchObject({ capacity: 18, vehicles: ['Van', 'Bus'], vehicleIds: ['veh-1', 'veh-2'] });
+  });
+
+  it('C·a_refused_addition_is_translated_by_its_status', async () => {
+    const add = { code: 'SAL-031', vehicleIds: ['veh-2'], key: 'vehicles-key-1' };
+    await expect(failing({ status: 422, code: 'BUSINESS_RULE_VIOLATION' }).addVehicles!(add)).rejects.toBeInstanceOf(Refused);
+    await expect(failing({ status: 403 }).addVehicles!(add)).rejects.toBeInstanceOf(Forbidden);
+    await expect(failing({ status: 503 }).addVehicles!(add)).rejects.toBeInstanceOf(Unavailable);
+    await expect(failing({ status: 400 }).addVehicles!(add)).rejects.toBeInstanceOf(FieldError);
+  });
+
+  it('C·a_departure_that_is_not_there_resolves_undefined', async () => {
+    expect(await failing({ status: 404, code: 'NOT_FOUND' }).getDeparture('SAL-404')).toBeUndefined();
+  });
+
+  it('C·a_refusal_is_translated_and_never_shows_the_body', async () => {
+    await expect(failing({ status: 403 }).getDeparture('SAL-031')).rejects.toBeInstanceOf(Forbidden);
+    await expect(failing({ status: 503 }).getDeparture('SAL-031')).rejects.toBeInstanceOf(Unavailable);
+    await expect(failing({ status: 500 }).getDeparture('SAL-031')).rejects.toBeInstanceOf(Failed);
+  });
+
+  it('C·the_reservations_the_what_each_received_and_the_real_base_are_read_from_the_service', async () => {
+    const { client } = fakeClient(() =>
+      departure({
+        travelersServed: 3,
+        reservations: [
+          { reservationId: 'r-1', customer: 'Ana Perez', travelers: 4, state: 'IN_EXECUTION', result: 'DELIVERED', travelersServed: 3, cause: 'One stayed' },
+          { reservationId: 'r-2', customer: 'Luis Gomez', travelers: 2, state: 'IN_EXECUTION' },
+        ],
+      }),
+    );
+    const read = await createExecutionGateway(client).getDeparture('SAL-031');
+    expect(read?.travelersServed).toBe(3);
+    expect(read?.reservationsUnavailable).toBe(false);
+    expect(read?.reservations).toMatchObject([
+      { reservationId: 'r-1', customer: 'Ana Perez', travelers: 4, state: 'IN_EXECUTION', result: 'DELIVERED', travelersServed: 3, cause: 'One stayed' },
+      { reservationId: 'r-2', customer: 'Luis Gomez', travelers: 2, state: 'IN_EXECUTION' },
+    ]);
+    expect(read?.reservations[1].result).toBeUndefined();
+  });
+
+  it('C·a_departure_the_service_answers_without_reservations_says_they_could_not_be_read', async () => {
+    const { client } = fakeClient(() => departure());
+    const read = await createExecutionGateway(client).getDeparture('SAL-031');
+    expect(read?.reservations).toEqual([]);
+    expect(read?.reservationsUnavailable).toBe(true);
+  });
+
+  it('C·the_services_are_sent_with_the_travelers_served_the_no_show_and_only_the_cause_that_exists', async () => {
+    const { client, calls } = fakeClient(() => departure({ travelersServed: 4, reservations: [{ reservationId: 'r-1', customer: 'Ana', travelers: 4, state: 'IN_EXECUTION' }] }));
+    const read = await createExecutionGateway(client).registerServices({
+      code: 'SAL-031',
+      key: 'services-key-1',
+      entries: [
+        { reservationId: 'r-1', result: 'DELIVERED', travelersServed: 4, noShow: false, cause: '' },
+        { reservationId: 'r-2', result: 'NOT_DELIVERED', travelersServed: 0, noShow: true, cause: ' did not come ' },
+      ],
+    });
+    expect(calls).toEqual([
+      {
+        path: '/api/v1/operations-cost/departures/SAL-031/services',
+        init: {
+          method: 'POST',
+          headers: { 'Idempotency-Key': 'services-key-1' },
+          body: {
+            services: [
+              { reservationId: 'r-1', result: 'DELIVERED', travelersServed: 4 },
+              { reservationId: 'r-2', result: 'NOT_DELIVERED', travelersServed: 0, noShow: true, cause: 'did not come' },
+            ],
+          },
+        },
+      },
+    ]);
+    expect(read.travelersServed).toBe(4);
+    expect(read.reservationsUnavailable).toBe(false);
+  });
+
+  it('C·a_refused_save_of_the_services_is_translated_by_its_status', async () => {
+    const save = { code: 'SAL-031', key: 'services-key-1', entries: [{ reservationId: 'r-1', result: 'DELIVERED' as const, travelersServed: 4, noShow: false, cause: '' }] };
+    await expect(failing({ status: 422, code: 'BUSINESS_RULE_VIOLATION' }).registerServices(save)).rejects.toBeInstanceOf(Refused);
+    await expect(failing({ status: 503 }).registerServices(save)).rejects.toBeInstanceOf(Unavailable);
+    await expect(failing({ status: 400 }).registerServices(save)).rejects.toBeInstanceOf(FieldError);
+  });
+
+  it('C·the_extraordinary_cancellation_is_sent_with_its_justification_and_shown_next_to_its_reservation', async () => {
+    const { client, calls } = fakeClient(() =>
+      departure({
+        travelersServed: 0,
+        reservations: [
+          {
+            reservationId: 'r-1',
+            customer: 'Ana',
+            travelers: 4,
+            state: 'IN_EXECUTION',
+            extraordinaryCancellation: { justification: 'a medical emergency', recordedBy: 'acc-1', recordedAt: '2026-12-01T15:30:00Z' },
+          },
+          { reservationId: 'r-2', customer: 'Luis', travelers: 2, state: 'IN_EXECUTION' },
+        ],
+      }),
+    );
+    const read = await createExecutionGateway(client).recordExtraordinaryCancellation({
+      code: 'SAL-031',
+      reservationId: 'r-1',
+      justification: ' a medical emergency ',
+      key: 'cancel-key-1',
+    });
+    expect(calls).toEqual([
+      {
+        path: '/api/v1/operations-cost/departures/SAL-031/reservations/r-1/extraordinary-cancellation',
+        init: { method: 'POST', headers: { 'Idempotency-Key': 'cancel-key-1' }, body: { justification: 'a medical emergency' } },
+      },
+    ]);
+    expect(read.reservations[0].extraordinaryCancellation).toEqual({
+      justification: 'a medical emergency',
+      recordedBy: 'acc-1',
+      recordedAt: '2026-12-01T10:30',
+    });
+    expect(read.reservations[1].extraordinaryCancellation).toBeUndefined();
+  });
+
+  it('C·a_refused_extraordinary_cancellation_is_translated_by_its_status', async () => {
+    const cancel = { code: 'SAL-031', reservationId: 'r-1', justification: 'x', key: 'cancel-key-1' };
+    await expect(failing({ status: 422, code: 'BUSINESS_RULE_VIOLATION' }).recordExtraordinaryCancellation(cancel)).rejects.toBeInstanceOf(Refused);
+    await expect(failing({ status: 422, code: 'INVALID_STATUS_TRANSITION' }).recordExtraordinaryCancellation(cancel)).rejects.toBeInstanceOf(Refused);
+    await expect(failing({ status: 503 }).recordExtraordinaryCancellation(cancel)).rejects.toBeInstanceOf(Unavailable);
+    await expect(failing({ status: 400 }).recordExtraordinaryCancellation(cancel)).rejects.toBeInstanceOf(FieldError);
+    await expect(failing({ status: 403 }).recordExtraordinaryCancellation(cancel)).rejects.toBeInstanceOf(Forbidden);
+  });
+
+  it('C·the_costs_of_a_departure_are_read_with_their_total_the_travelers_served_and_the_catalogued_cost', async () => {
+    const { client, calls } = fakeClient(() => ({
+      data: [
+        {
+          costId: 'c-1',
+          concept: 'Boat and guide',
+          amountCents: 84000000,
+          mode: 'CALCULATED',
+          unitCostCents: 21000000,
+          travelersServed: 4,
+          withoutParametrization: false,
+          recordedAt: '2026-12-01T15:00:00Z',
+        },
+        { costId: 'c-2', concept: 'Fuel', amountCents: 50000, mode: 'MANUAL', withoutParametrization: true, justification: 'Paid at the dock', recordedAt: '2026-12-01T16:00:00Z' },
+      ],
+      totalCents: 84050000,
+      travelersServed: 4,
+      baseCostCents: 21000000,
+    }));
+    const sheet = await createExecutionGateway(client).getCosts!('SAL-031');
+    expect(calls.map((c) => c.path)).toEqual(['/api/v1/operations-cost/departures/SAL-031/costs']);
+    expect(sheet).toMatchObject({ totalCents: 84050000, travelersServed: 4, baseCostCents: 21000000 });
+    expect(sheet.lines).toHaveLength(2);
+    expect(sheet.lines[0]).toMatchObject({ costId: 'c-1', mode: 'CALCULATED', unitCostCents: 21000000, travelersServed: 4, withoutParametrization: false });
+    expect(sheet.lines[1]).toMatchObject({ mode: 'MANUAL', withoutParametrization: true, justification: 'Paid at the dock' });
+  });
+
+  it('C·an_answer_that_is_not_a_sheet_of_costs_is_a_failure', async () => {
+    for (const bad of [{}, { data: [], totalCents: 'x', travelersServed: 0 }, { data: [], totalCents: 0 }]) {
+      await expect(createExecutionGateway(fakeClient(() => bad).client).getCosts!('SAL-031')).rejects.toBeInstanceOf(Failed);
+    }
+  });
+
+  it('C·a_tour_without_a_catalogued_cost_has_no_base_cost_in_the_sheet', async () => {
+    const { client } = fakeClient(() => ({ data: [], totalCents: 0, travelersServed: 0 }));
+    const sheet = await createExecutionGateway(client).getCosts!('SAL-031');
+    expect(sheet.lines).toEqual([]);
+    expect(sheet.baseCostCents).toBeUndefined();
+  });
+
+  it('C·a_real_expense_is_sent_with_its_amount_in_minor_units_its_key_and_only_the_justification_that_exists', async () => {
+    const { client, calls } = fakeClient(() => ({ costId: 'c-9', concept: 'Fuel', amountCents: 125050, mode: 'MANUAL', withoutParametrization: false, recordedAt: '2026-12-01T16:00:00Z' }));
+    const gateway = createExecutionGateway(client);
+    const line = await gateway.recordCost!({ code: 'SAL-031', concept: ' Fuel ', mode: 'MANUAL', amountCents: 125050, justification: '', key: 'cost-key-0001' });
+    await gateway.recordCost!({ code: 'SAL-031', concept: 'Fuel', mode: 'MANUAL', amountCents: 125050, justification: ' Paid at the dock ', key: 'cost-key-0002' });
+    expect(calls[0]).toEqual({
+      path: '/api/v1/operations-cost/departures/SAL-031/costs',
+      init: { method: 'POST', headers: { 'Idempotency-Key': 'cost-key-0001' }, body: { concept: 'Fuel', mode: 'MANUAL', amountCents: 125050 } },
+    });
+    expect(calls[1].init).toMatchObject({ body: { justification: 'Paid at the dock' } });
+    expect(line).toMatchObject({ costId: 'c-9', amountCents: 125050, mode: 'MANUAL' });
+  });
+
+  it('C·a_calculated_cost_sends_only_the_concept_and_the_mode_never_an_amount', async () => {
+    const { client, calls } = fakeClient(() => ({ costId: 'c-8', concept: 'Boat', amountCents: 84000000, mode: 'CALCULATED', withoutParametrization: false, recordedAt: '2026-12-01T16:00:00Z' }));
+    await createExecutionGateway(client).recordCost!({ code: 'SAL-031', concept: 'Boat', mode: 'CALCULATED', amountCents: 999, justification: 'ignored', key: 'cost-key-0003' });
+    expect(calls[0].init).toEqual({ method: 'POST', headers: { 'Idempotency-Key': 'cost-key-0003' }, body: { concept: 'Boat', mode: 'CALCULATED' } });
+  });
+
+  it('C·a_refused_cost_is_translated_by_its_status', async () => {
+    const cost = { code: 'SAL-031', concept: 'Fuel', mode: 'MANUAL' as const, amountCents: 1000, justification: '', key: 'cost-key-0001' };
+    await expect(failing({ status: 422, code: 'BUSINESS_RULE_VIOLATION' }).recordCost!(cost)).rejects.toBeInstanceOf(Refused);
+    await expect(failing({ status: 422, code: 'INVALID_STATUS_TRANSITION' }).recordCost!(cost)).rejects.toBeInstanceOf(Refused);
+    await expect(failing({ status: 403 }).recordCost!(cost)).rejects.toBeInstanceOf(Forbidden);
+    await expect(failing({ status: 503 }).recordCost!(cost)).rejects.toBeInstanceOf(Unavailable);
+    await expect(failing({ status: 400 }).recordCost!(cost)).rejects.toBeInstanceOf(FieldError);
+    await expect(failing({ status: 503 }).getCosts!('SAL-031')).rejects.toBeInstanceOf(Unavailable);
+  });
+
+  it('C·a_cancellation_is_asked_to_the_saga_with_its_key_and_the_departure_is_read_again', async () => {
+    const { client, calls } = fakeClient((call) => (call.path.startsWith('/api/v1/sagas') ? { id: 's-1', status: 'RUNNING', departureCode: 'SAL-031' } : departure({ status: 'SCHEDULED' })));
+    const read = await createExecutionGateway(client).cancelDeparture!({ code: 'SAL-031', key: 'cancel-key-1' });
+    expect(calls).toEqual([
+      { path: '/api/v1/sagas/cancel-departure', init: { method: 'POST', headers: { 'Idempotency-Key': 'cancel-key-1' }, body: { departureCode: 'SAL-031' } } },
+      { path: '/api/v1/operations-cost/departures/SAL-031', init: undefined },
+    ]);
+    expect(read.status).toBe('SCHEDULED');
+    expect(read.cancellation).toBeUndefined();
+  });
+
+  it('C·the_answer_of_the_saga_is_told_a_departure_it_refused_is_refused_and_a_failure_before_the_cancellation_is_a_failure', async () => {
+    const cancel = { code: 'SAL-031', key: 'cancel-key-1' };
+    const saga = (answer: Record<string, unknown>) => createExecutionGateway(fakeClient((call) => (call.path.startsWith('/api/v1/sagas') ? answer : departure({ status: 'SCHEDULED' }))).client);
+    await expect(saga({ id: 's-1', status: 'COMPENSATED', reason: 'DEPARTURE_REFUSED', failedStep: 'CANCEL_DEPARTURE' }).cancelDeparture!(cancel)).rejects.toMatchObject({
+      name: 'Refused',
+      code: 'INVALID_STATUS_TRANSITION',
+    });
+    await expect(saga({ id: 's-1', status: 'COMPENSATED', reason: 'PARTICIPANT_UNAVAILABLE' }).cancelDeparture!(cancel)).rejects.toBeInstanceOf(Failed);
+    await expect(saga({ id: 's-1', status: 'FAILED', failedStep: 'CANCEL_DEPARTURE' }).cancelDeparture!(cancel)).rejects.toBeInstanceOf(Failed);
+    // the departure is cancelled and some reservations wait for a person: the page shows the departure as it is
+    await expect(saga({ id: 's-1', status: 'FAILED', failedStep: 'OPEN_EPISODES', reservationsLeft: ['r-1'] }).cancelDeparture!(cancel)).resolves.toMatchObject({ code: 'SAL-031' });
+    await expect(saga({ id: 's-1', status: 'COMPLETED' }).cancelDeparture!(cancel)).resolves.toMatchObject({ code: 'SAL-031' });
+  });
+
+  it('C·a_refused_cancellation_is_translated_by_its_status', async () => {
+    const cancel = { code: 'SAL-031', key: 'cancel-key-1' };
+    await expect(failing({ status: 403 }).cancelDeparture!(cancel)).rejects.toBeInstanceOf(Forbidden);
+    await expect(failing({ status: 503 }).cancelDeparture!(cancel)).rejects.toBeInstanceOf(Unavailable);
+    await expect(failing({ status: 400 }).cancelDeparture!(cancel)).rejects.toBeInstanceOf(FieldError);
+  });
+
+  it('C·a_cancelled_departure_carries_when_by_whom_and_why_and_the_time_is_the_wall_clock_of_the_tenant', async () => {
+    const { client } = fakeClient(() =>
+      departure({
+        status: 'CANCELLED',
+        actualStart: undefined,
+        cancellation: { cancelledAt: '2026-12-01T15:30:00Z', cancelledBy: 'acc-1', cause: 'NOT_CARRIED_OUT', reason: 'Nobody came' },
+      }),
+    );
+    const read = await createExecutionGateway(client).getDeparture('SAL-031');
+    expect(read?.cancellation).toEqual({ at: '2026-12-01T10:30', by: 'acc-1', cause: 'NOT_CARRIED_OUT', reason: 'Nobody came' });
+    const system = await createExecutionGateway(
+      fakeClient(() => departure({ status: 'CANCELLED', cancellation: { cancelledAt: '2026-12-01T15:30:00Z', cause: 'NOT_ATTRIBUTABLE_TO_CUSTOMER' } })).client,
+    ).getDeparture('SAL-031');
+    expect(system?.cancellation).toEqual({ at: '2026-12-01T10:30', cause: 'NOT_ATTRIBUTABLE_TO_CUSTOMER' });
+  });
+
+  it('C·not_performed_is_sent_as_NOT_CARRIED_OUT_with_its_cause_and_no_hours', async () => {
+    const { client, calls } = fakeClient(() => departure({ status: 'CANCELLED', reservations: [] }));
+    await createExecutionGateway(client).registerRegularization({
+      code: 'SAL-031',
+      timeZone: 'America/Bogota',
+      result: 'NOT_DONE',
+      startedAt: '2026-12-01T08:00',
+      finishedAt: '2026-12-01T16:00',
+      earlyStartMotive: 'early',
+      interruption: 'rain',
+      notDoneCause: ' Nobody came ',
+      key: 'reg-key-1',
+    });
+    expect(calls[0]).toEqual({
+      path: '/api/v1/operations-cost/departures/SAL-031/regularization',
+      init: { method: 'POST', headers: { 'Idempotency-Key': 'reg-key-1' }, body: { result: 'NOT_CARRIED_OUT', notCarriedOutCause: 'Nobody came' } },
+    });
+  });
+
+  it('C·a_personal_emergency_is_sent_to_novelties_with_its_key_and_the_novelties_of_the_departure_are_read', async () => {
+    const { client, calls } = fakeClient(() =>
+      departure({
+        reservations: [{ reservationId: 'r-1', customer: 'Ana', travelers: 4, state: 'IN_EXECUTION' }],
+        novelties: [{ at: '2026-12-01T15:30:00Z', type: 'PERSONAL_EMERGENCY', detail: 'Se lastimo una pierna', who: 'acc-1', reservationId: 'r-1', affected: 2 }],
+      }),
+    );
+    const read = await createExecutionGateway(client).registerNovelty({
+      code: 'SAL-031',
+      reservationId: 'r-1',
+      detail: '  Se lastimo una pierna  ',
+      emergency: true,
+      affected: 2,
+      key: 'emergency-key-1',
+    });
+    expect(calls).toEqual([
+      {
+        path: '/api/v1/operations-cost/departures/SAL-031/novelties',
+        init: {
+          method: 'POST',
+          headers: { 'Idempotency-Key': 'emergency-key-1' },
+          body: { reservationId: 'r-1', type: 'PERSONAL_EMERGENCY', detail: 'Se lastimo una pierna', affected: 2 },
+        },
+      },
+    ]);
+    expect(read.novelties).toEqual([
+      { at: '2026-12-01T10:30', type: 'Emergencia personal', detail: 'Se lastimo una pierna', who: 'acc-1', reservationId: 'r-1', affected: 2 },
+    ]);
+  });
+
+  it('C·a_departure_without_novelties_has_none_and_an_ordinary_novelty_is_read_as_such', async () => {
+    expect((await createExecutionGateway(fakeClient(() => departure()).client).getDeparture('SAL-031'))?.novelties).toEqual([]);
+    const { client } = fakeClient(() => departure({ novelties: [{ at: '2026-12-01T15:30:00Z', type: 'NOVELTY', detail: 'Lluvia', who: 'acc-1', reservationId: 'r-1' }] }));
+    expect((await createExecutionGateway(client).getDeparture('SAL-031'))?.novelties[0]).toMatchObject({ type: 'Novedad', detail: 'Lluvia' });
+  });
+
+  it('C·the_ordinary_novelty_is_refused_and_never_sent', async () => {
+    const { client, calls } = fakeClient(() => departure());
+    await expect(
+      createExecutionGateway(client).registerNovelty({ code: 'SAL-031', reservationId: 'r-1', detail: 'Lluvia', emergency: false, key: 'novelty-key-1' }),
+    ).rejects.toThrow('NOT_AVAILABLE');
+    expect(calls).toHaveLength(0);
+  });
+
+  it('C·a_refused_emergency_is_translated_by_its_status', async () => {
+    const input = { code: 'SAL-031', reservationId: 'r-1', detail: 'x', emergency: true, affected: 1, key: 'emergency-key-1' };
+    await expect(failing({ status: 422, code: 'BUSINESS_RULE_VIOLATION' }).registerNovelty(input)).rejects.toBeInstanceOf(Refused);
+    await expect(failing({ status: 422, code: 'INVALID_STATUS_TRANSITION' }).registerNovelty(input)).rejects.toBeInstanceOf(Refused);
+    await expect(failing({ status: 503 }).registerNovelty(input)).rejects.toBeInstanceOf(Unavailable);
+    await expect(failing({ status: 400 }).registerNovelty(input)).rejects.toBeInstanceOf(FieldError);
+    await expect(failing({ status: 403 }).registerNovelty(input)).rejects.toBeInstanceOf(Forbidden);
+  });
+
+  it('U·it_says_it_talks_to_the_service_and_offers_the_departure_the_start_the_finish_and_the_regularization', () => {
+    const gateway = createExecutionGateway(fakeClient(() => departure()).client);
+    expect(gateway.connected).toBe(true);
+    expect(gateway.panels).toEqual(['departure', 'vehicles', 'change-vehicles', 'start', 'reservations', 'finish', 'regularize', 'costs', 'cancel', 'cancellation']);
+  });
+
+  it('U·what_the_service_does_not_offer_yet_is_refused_and_never_sent', async () => {
+    const { client, calls } = fakeClient(() => departure());
+    const gateway = createExecutionGateway(client);
+    await expect(gateway.registerNovelty({ code: 'SAL-031', reservationId: 'r', detail: 'd', emergency: false, key: 'k' })).rejects.toThrow('NOT_AVAILABLE');
+    expect(calls).toHaveLength(0);
+  });
+});

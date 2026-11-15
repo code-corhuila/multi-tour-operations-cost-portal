@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react';
+import { FieldError } from '../departures/model';
+import { toInstant } from '../departures/time';
 import type { Departure, RegularizationResult } from './gateway';
-import type { PanelProps } from './panelProps';
+import { failureText, type PanelProps } from './panelProps';
 import { useRegistration } from './useRegistration';
 
 type Errors = Partial<Record<'result' | 'start' | 'end' | 'motive' | 'interruption' | 'notDone', string>>;
@@ -15,42 +17,63 @@ export function RegularizePanel({ departure, gateway, canManage, onChanged }: Pa
   const [interruption, setInterruption] = useState('');
   const [notDone, setNotDone] = useState('');
   const [errors, setErrors] = useState<Errors>({});
-  const { sending, failed, submit } = useRegistration();
+  const { sending, failed, error: failure, submit } = useRegistration();
   const locked = !canManage || sending;
+  // Wall clocks of the zone of the departure ("2026-10-10T08:00") compare as text; the motive is asked only for a start earlier than the scheduled one.
+  const early = start !== '' && start < departure.scheduledStart;
 
   async function send(event?: FormEvent) {
     event?.preventDefault();
     const next: Errors = {};
     if (!result) next.result = 'Selecciona el resultado.';
     if (result === 'NOT_DONE' && !notDone.trim()) next.notDone = 'Ingresa la causal de la no realización.';
+    else if (result === 'NOT_DONE' && notDone.trim().length > 500) next.notDone = 'La causal no puede superar 500 caracteres.';
     if (result === 'EXECUTED' || result === 'INTERRUPTED') {
       if (!start) next.start = 'Ingresa la hora de inicio real.';
       if (!end) next.end = 'Ingresa la hora de finalización real.';
-      if (start && new Date(start) < new Date(departure.scheduledStart) && !motive.trim()) {
-        next.motive = 'Ingresa el motivo: el inicio real es anterior al programado.';
-      }
+      if (early && !motive.trim()) next.motive = 'Ingresa el motivo: el inicio real es anterior al programado.';
+      // The courtesy checks of the page; the service decides. The hours are compared as instants of the zone of the departure, not of the browser.
+      const now = Date.now();
+      const at = (wall: string) => (wall ? Date.parse(toInstant(wall, departure.timeZone)) : NaN);
+      if (start && at(start) > now) next.start = 'El inicio real no puede ser posterior a este momento.';
+      if (start && end && at(end) < at(start)) next.end = 'La finalización real no puede ser anterior al inicio.';
+      else if (end && at(end) > now) next.end = 'La finalización real no puede ser posterior a este momento.';
       if (result === 'INTERRUPTED' && !interruption.trim()) next.interruption = 'Ingresa la causa y la evidencia de la interrupción.';
     }
     setErrors(next);
     if (Object.keys(next).length > 0 || !result) return;
     let updated: Departure | undefined;
-    const input = { code: departure.code, result, startedAt: start, finishedAt: end, earlyStartMotive: motive.trim(), interruption: interruption.trim(), notDoneCause: notDone.trim() };
-    const ok = await submit(`${departure.code}|${JSON.stringify(input)}`, async (key) => {
+    const input = {
+      code: departure.code,
+      timeZone: departure.timeZone,
+      result,
+      startedAt: start,
+      finishedAt: end,
+      earlyStartMotive: motive.trim(),
+      interruption: interruption.trim(),
+      notDoneCause: notDone.trim(),
+    };
+    // the key follows what is sent: a field that does not travel with this result never renews it
+    const sent = result === 'NOT_DONE' ? { code: input.code, result, notDoneCause: input.notDoneCause } : { ...input, notDoneCause: '' };
+    const ok = await submit(`${departure.code}|${JSON.stringify(sent)}`, async (key) => {
       updated = await gateway.registerRegularization({ ...input, key });
     });
     if (ok && updated) onChanged(updated);
   }
 
+  // The service judges the cause too: its 400 on it is told beside the field, in our words, and the data stay.
+  const refusedCause = failed && failure instanceof FieldError && failure.fields.some((f) => f.field === 'notCarriedOutCause');
+  const shown: Errors = { ...errors, ...(refusedCause && !errors.notDone ? { notDone: 'El servicio no aceptó la causal: debe tener de 1 a 500 caracteres.' } : {}) };
   const field = (id: keyof Errors, name: string) => ({
     id: `reg-${name}`,
     disabled: locked,
-    'aria-invalid': errors[id] ? true : undefined,
-    'aria-describedby': errors[id] ? `reg-${name}-error` : undefined,
+    'aria-invalid': shown[id] ? true : undefined,
+    'aria-describedby': shown[id] ? `reg-${name}-error` : undefined,
   });
   const error = (id: keyof Errors, name: string) =>
-    errors[id] && (
+    shown[id] && (
       <span id={`reg-${name}-error`} className="operator-form-feedback is-error">
-        {errors[id]}
+        {shown[id]}
       </span>
     );
   const times = result === 'EXECUTED' || result === 'INTERRUPTED';
@@ -60,9 +83,9 @@ export function RegularizePanel({ departure, gateway, canManage, onChanged }: Pa
       <p className="operator-eyebrow">Salida pendiente de regularización</p>
       <h2 id="regularize-title">Registrar lo ocurrido</h2>
       <p className="operator-copy">
-        La salida superó su hora de finalización estimada sin cierre. Registra la información real: ejecutada y finalizada,
-        interrumpida o no realizada (Cancelada). La hora programada sigue gobernando los plazos aunque la hora real reportada sea
-        anterior; en ese caso el motivo es obligatorio y queda auditado.
+        La salida superó su hora de finalización estimada sin cierre. Registra la información real: ejecutada y finalizada, interrumpida o no realizada
+        (Cancelada). La hora programada sigue gobernando los plazos aunque la hora real reportada sea anterior; en ese caso el motivo es obligatorio y queda
+        auditado.
       </p>
       <form className="operator-form-grid" onSubmit={send} noValidate>
         <div>
@@ -87,24 +110,26 @@ export function RegularizePanel({ departure, gateway, canManage, onChanged }: Pa
               <input {...field('end', 'end')} type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} />
               {error('end', 'end')}
             </div>
-            <div className="operator-form-wide">
-              <label htmlFor="reg-motive">Motivo si la hora real de inicio es anterior a la programada</label>
-              <input {...field('motive', 'motive')} value={motive} onChange={(e) => setMotive(e.target.value)} />
-              {error('motive', 'motive')}
-            </div>
+            {early && (
+              <div className="operator-form-wide">
+                <label htmlFor="reg-motive">Motivo si la hora real de inicio es anterior a la programada</label>
+                <input {...field('motive', 'motive')} maxLength={500} value={motive} onChange={(e) => setMotive(e.target.value)} />
+                {error('motive', 'motive')}
+              </div>
+            )}
           </>
         )}
         {result === 'INTERRUPTED' && (
           <div className="operator-form-wide">
             <label htmlFor="reg-interruption">Interrupción (causa y evidencia)</label>
-            <textarea {...field('interruption', 'interruption')} value={interruption} onChange={(e) => setInterruption(e.target.value)} />
+            <textarea {...field('interruption', 'interruption')} maxLength={1000} value={interruption} onChange={(e) => setInterruption(e.target.value)} />
             {error('interruption', 'interruption')}
           </div>
         )}
         {result === 'NOT_DONE' && (
           <div className="operator-form-wide">
             <label htmlFor="reg-notdone">Causal de la no realización</label>
-            <textarea {...field('notDone', 'notdone')} value={notDone} onChange={(e) => setNotDone(e.target.value)} />
+            <textarea {...field('notDone', 'notdone')} maxLength={500} value={notDone} onChange={(e) => setNotDone(e.target.value)} />
             {error('notDone', 'notdone')}
           </div>
         )}
@@ -116,7 +141,7 @@ export function RegularizePanel({ departure, gateway, canManage, onChanged }: Pa
       </form>
       {failed && (
         <div role="alert">
-          <p className="operator-form-feedback is-error">No pudimos registrar la regularización. Tus datos siguen aquí.</p>
+          <p className="operator-form-feedback is-error">{failureText(failure, 'la regularización', result !== 'NOT_DONE')}</p>
           <button type="button" className="operator-outline" disabled={locked} onClick={() => void send()}>
             Reintentar
           </button>
