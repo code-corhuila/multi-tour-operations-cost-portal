@@ -47,15 +47,20 @@ const shown = (d: DepartureRow, show: Show) => (show === 'all' ? true : show ===
 const when = (value: string) => value.replace('T', ' ');
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-async function load(gateway: DeparturesGateway): Promise<Data> {
-  const [departures, tours, vehicles] = await Promise.all([gateway.listDepartures(), gateway.listTours(), gateway.listVehicles()]);
+// The vehicles are read by the Administrator only (the service answers 403 to a collaborator); the tours are tolerated for whoever is refused the catalog.
+async function load(gateway: DeparturesGateway, canSchedule: boolean): Promise<Data> {
+  const [departures, tours, vehicles] = await Promise.all([
+    gateway.listDepartures(),
+    canSchedule ? gateway.listTours() : gateway.listTours().catch(() => []),
+    canSchedule ? gateway.listVehicles() : Promise.resolve([]),
+  ]);
   return { departures, tours, vehicles };
 }
 
 // Page of the Mockup admin-salidas.html (spec 005 PT-10) over the test data of the port.
 export function DeparturesPage({ gateway, canSchedule, canManage, onOpen, onSchedule, onEdit, notice, children }: DeparturesPageProps) {
   // A stable loader: useAsync reloads whenever the function changes.
-  const loadAll = useCallback(() => load(gateway), [gateway]);
+  const loadAll = useCallback(() => load(gateway, canSchedule), [gateway, canSchedule]);
   const { state, retry, set } = useAsync(loadAll);
   const [show, setShow] = useState<Show>('all');
   const [cancelling, setCancelling] = useState<string>();
@@ -248,9 +253,12 @@ export function DeparturesPage({ gateway, canSchedule, canManage, onOpen, onSche
                       <td>{when(d.start)}</td>
                       <td>{when(d.end)}</td>
                       <td>
-                        {vehiclesOf(d)
-                          .map((v) => v.name)
-                          .join(', ') || 'Sin vehículos'}
+                        {/* An operator cannot read the vehicles, so a dash says "not shown", never "none" */}
+                        {!canSchedule && d.vehicleIds.length > 0
+                          ? '—'
+                          : vehiclesOf(d)
+                              .map((v) => v.name)
+                              .join(', ') || 'Sin vehículos'}
                       </td>
                       <td>{capacityOf(d)}</td>
                       <td>{d.booked}</td>
@@ -280,7 +288,11 @@ export function DeparturesPage({ gateway, canSchedule, canManage, onOpen, onSche
                         )}
                         {canManage && (d.status === 'SCHEDULED' || d.status === 'IN_EXECUTION') && (
                           <button type="button" className="operator-outline" onClick={() => onOpen(d.code)}>
-                            {d.pendingRegularization && d.status === 'SCHEDULED' ? 'Regularizar' : d.status === 'SCHEDULED' ? 'Registrar ejecución' : 'Gestionar ejecución'}
+                            {d.pendingRegularization && d.status === 'SCHEDULED'
+                              ? 'Regularizar'
+                              : d.status === 'SCHEDULED'
+                                ? 'Registrar ejecución'
+                                : 'Gestionar ejecución'}
                           </button>
                         )}
                         {(d.status === 'FINISHED' || d.status === 'CANCELLED') && (
