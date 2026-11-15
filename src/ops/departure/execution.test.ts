@@ -472,7 +472,7 @@ describe('the connected execution gateway', () => {
   it('U·it_says_it_talks_to_the_service_and_offers_the_departure_the_start_the_finish_and_the_regularization', () => {
     const gateway = createExecutionGateway(fakeClient(() => departure()).client);
     expect(gateway.connected).toBe(true);
-    expect(gateway.panels).toEqual(['departure', 'vehicles', 'start', 'reservations', 'finish', 'regularize', 'costs', 'cancel', 'cancellation']);
+    expect(gateway.panels).toEqual(['departure', 'vehicles', 'change-vehicles', 'start', 'reservations', 'finish', 'regularize', 'costs', 'cancel', 'cancellation']);
   });
 
   it('U·what_the_service_does_not_offer_yet_is_refused_and_never_sent', async () => {
