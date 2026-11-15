@@ -73,6 +73,7 @@ export function ChangeVehiclesPanel({ departure, gateway, canSchedule, onChanged
   const preview = departure.tourCapacity === undefined ? '—' : effectiveCapacity(departure.tourCapacity, capacities, true);
   const toggle = (id: string, on: boolean) => {
     setChange(undefined);
+    setError(undefined);
     setChosen(on ? [...chosen, id] : chosen.filter((chosenId) => chosenId !== id));
   };
 
