@@ -140,4 +140,14 @@ describe('departures list over the service (spec 008)', () => {
     expect(within(sal).queryByRole('button', { name: /Editar/ })).not.toBeInTheDocument();
     expect(within(sal).getByRole('button', { name: 'Registrar ejecución' })).toBeInTheDocument();
   });
+
+  it('U·collaborator_sees_the_list_although_the_vehicles_are_refused: the vehicles are for the administrator', async () => {
+    const base = createDeparturesFixture();
+    const listVehicles = vi.fn().mockRejectedValue(new Error('403'));
+    const { onOpen } = setup({ admin: false, gateway: { ...base, listVehicles } });
+    fireEvent.click(within(await row('SAL-018')).getByRole('button', { name: 'Registrar ejecución' }));
+    expect(onOpen).toHaveBeenCalledWith('SAL-018');
+    expect(listVehicles).not.toHaveBeenCalled();
+    expect(screen.queryByText('No pudimos cargar las salidas')).not.toBeInTheDocument();
+  });
 });
