@@ -253,9 +253,12 @@ export function DeparturesPage({ gateway, canSchedule, canManage, onOpen, onSche
                       <td>{when(d.start)}</td>
                       <td>{when(d.end)}</td>
                       <td>
-                        {vehiclesOf(d)
-                          .map((v) => v.name)
-                          .join(', ') || 'Sin vehículos'}
+                        {/* An operator cannot read the vehicles, so a dash says "not shown", never "none" */}
+                        {!canSchedule && d.vehicleIds.length > 0
+                          ? '—'
+                          : vehiclesOf(d)
+                              .map((v) => v.name)
+                              .join(', ') || 'Sin vehículos'}
                       </td>
                       <td>{capacityOf(d)}</td>
                       <td>{d.booked}</td>
