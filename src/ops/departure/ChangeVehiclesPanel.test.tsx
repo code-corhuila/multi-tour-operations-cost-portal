@@ -212,4 +212,15 @@ describe('the panel Cambiar vehículos (spec 016)', () => {
     expect(within(p).getByRole('group', { name: 'Vehículos de la salida' })).toHaveAttribute('aria-describedby', 'change-vehicles-error');
     expect(posts(request)).toHaveLength(0);
   });
+
+  it('U·choosing_a_vehicle_again_clears_the_error_of_the_empty_set', async () => {
+    service();
+    const p = await panel();
+    fireEvent.click(await within(p).findByLabelText(/Van/));
+    confirm(p);
+    await within(p).findByText('Elige al menos un vehículo.');
+    fireEvent.click(within(p).getByLabelText(/Van/));
+    expect(within(p).queryByText('Elige al menos un vehículo.')).not.toBeInTheDocument();
+    expect(within(p).getByRole('group', { name: 'Vehículos de la salida' })).not.toHaveAttribute('aria-describedby');
+  });
 });
