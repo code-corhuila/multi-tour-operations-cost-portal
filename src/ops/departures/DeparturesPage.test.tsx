@@ -119,7 +119,17 @@ describe('departures list over the service (spec 008)', () => {
     ...createDeparturesFixture(),
     connected: true,
     listDepartures: async () => [
-      { code: 'SAL-031', tourId: 'tour-1', start: '2026-12-01T08:00', end: '2026-12-01T16:00', vehicleIds: [], booked: 3, reservations: 0, status: 'SCHEDULED', capacity: 9 },
+      {
+        code: 'SAL-031',
+        tourId: 'tour-1',
+        start: '2026-12-01T08:00',
+        end: '2026-12-01T16:00',
+        vehicleIds: [],
+        booked: 3,
+        reservations: 0,
+        status: 'SCHEDULED',
+        capacity: 9,
+      },
     ],
     listTours: async () => [{ id: 'tour-1', name: 'Cañón del río', capacity: 18, needsTransport: true }],
     listVehicles: async () => [],
@@ -139,5 +149,26 @@ describe('departures list over the service (spec 008)', () => {
     expect(within(sal).queryByRole('button', { name: 'Cancelar salida' })).not.toBeInTheDocument();
     expect(within(sal).queryByRole('button', { name: /Editar/ })).not.toBeInTheDocument();
     expect(within(sal).getByRole('button', { name: 'Registrar ejecución' })).toBeInTheDocument();
+  });
+
+  it('U·collaborator_sees_the_list_although_the_vehicles_are_refused: the vehicles are for the administrator', async () => {
+    const base = createDeparturesFixture();
+    const listVehicles = vi.fn().mockRejectedValue(new Error('403'));
+    const { onOpen } = setup({ admin: false, gateway: { ...base, listVehicles } });
+    fireEvent.click(within(await row('SAL-018')).getByRole('button', { name: 'Registrar ejecución' }));
+    expect(onOpen).toHaveBeenCalledWith('SAL-018');
+    expect(listVehicles).not.toHaveBeenCalled();
+    expect(screen.queryByText('No pudimos cargar las salidas')).not.toBeInTheDocument();
+  });
+
+  it('U·collaborator_is_not_told_a_departure_has_no_vehicles: it cannot read them, so the cell shows a dash', async () => {
+    const base = createDeparturesFixture();
+    const departures = await base.listDepartures();
+    const withVehicles = departures.find((d) => d.vehicleIds.length > 0);
+    expect(withVehicles).toBeDefined();
+    setup({ admin: false, gateway: { ...base, listVehicles: vi.fn().mockRejectedValue(new Error('403')) } });
+    const cells = within(await row(withVehicles!.code)).getAllByRole('cell').map((c) => c.textContent);
+    expect(cells).not.toContain('Sin vehículos');
+    expect(cells).toContain('—');
   });
 });
